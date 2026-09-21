@@ -1,5 +1,5 @@
 --=============================================================
--- RICK PRIME — Portal GUI + Marcação + Anti-TP (v3 CORRIGIDO)
+-- RICK PRIME — Portal GUI + Marcação + Anti-TP (v5)
 --=============================================================
 local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
@@ -8,6 +8,7 @@ local CollectionService = game:GetService("CollectionService")
 local SoundService = game:GetService("SoundService")
 local Lighting = game:GetService("Lighting")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 local player = Players.LocalPlayer
 
 -- ✅ Cleanup de execução anterior
@@ -27,10 +28,9 @@ end
 --=============================================================
 local PORTAL_ASSET_ID = "90557902399922"
 local PORTAL_TEXTURE = "rbxthumb://type=Asset&id=" .. PORTAL_ASSET_ID .. "&w=420&h=420"
-local PORTAL_AUDIO_ID = "rbxassetid://756847338"
+local PORTAL_LOOP_SOUND_ID = "rbxassetid://9063726568"
 local TP_AUDIO_ID = "rbxassetid://74562584385247"
 
--- ✅ Tags separadas por categoria
 local TAG_GEN  = "RP_Gen_"  .. player.UserId
 local TAG_M1   = "RP_M1_"   .. player.UserId
 local TAG_M2   = "RP_M2_"   .. player.UserId
@@ -51,9 +51,38 @@ local ATP = {
     IgnorarSeCaindo = true,
     VelocidadeCaindoMax = -50,
     IgnorarJanela = 1.5,
+    -- ✅ NOVO: janela de pulo ignorada
+    JanelaPulo = 0.5,
 }
 
 local atpUltPos, atpUltimoCheck, atpCooldown, atpUltimoRespawn = nil, 0, false, 0
+
+-- ✅ Detecta se o jogador pulou recentemente
+local atpUltimoPulo = 0
+local atpPulando = false
+
+UserInputService.JumpRequest:Connect(function()
+    atpUltimoPulo = tick()
+    atpPulando = true
+end)
+
+-- ✅ Também detecta pulo via Humanoid state (mais confiável)
+local function estaNoAr(hrp)
+    if not hrp then return false end
+    local state = hrp:FindFirstChild("Humanoid")  -- fallback
+    if not state then
+        local char = hrp.Parent
+        if char then
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                local st = hum:GetState()
+                return st == Enum.HumanoidStateType.Jumping
+                    or st == Enum.HumanoidStateType.Freefall
+            end
+        end
+    end
+    return false
+end
 
 --=============================================================
 -- FX GUI
@@ -239,7 +268,7 @@ local function cameraShake(intensidade, duracao)
 end
 
 --=============================================================
--- ✅ BUG 1 CORRIGIDO: playTPSound AGORA É DEFINIDA ANTES
+-- SONS
 --=============================================================
 local function playTPSound()
     local s = Instance.new("Sound")
@@ -259,7 +288,10 @@ local COR_TP = Color3.fromRGB(50, 255, 130)
 local efeitoTPAtivo = false
 
 local function efeitoTP()
-    if efeitoTPAtivo then return end
+    if efeitoTPAtivo then
+        flashTela(COR_TP, 0.12)
+        return
+    end
     efeitoTPAtivo = true
     task.spawn(function()
         fadeFrame.BackgroundColor3 = COR_TP
@@ -299,46 +331,42 @@ local function fazerTPComEfeito(root, destinoCFrame)
 end
 
 --=============================================================
--- 🌀 FECHAMENTO ANIMADO (giro + encolhimento)
+-- FECHAMENTO ANIMADO
 --=============================================================
 local function fecharPortal(portalPart)
     if not portalPart or not portalPart.Parent then return end
     if portalPart:GetAttribute("Fechando") then return end
     portalPart:SetAttribute("Fechando", true)
 
-    -- Desativa interações
     portalPart.CanTouch = false
     portalPart.CanCollide = false
 
-    -- Para partículas
     for _, emitter in ipairs(portalPart:GetChildren()) do
         if emitter:IsA("ParticleEmitter") then
             emitter.Enabled = false
         end
     end
 
-    -- Fade out do som
+    local somLoop = portalPart:FindFirstChild("PortalLoopSound")
+    if somLoop and somLoop:IsA("Sound") then
+        pcall(function()
+            TweenService:Create(somLoop, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Volume = 0}):Play()
+        end)
+    end
+
     for _, sfx in ipairs(portalPart:GetChildren()) do
-        if sfx:IsA("Sound") then
+        if sfx:IsA("Sound") and sfx.Name ~= "PortalLoopSound" then
             pcall(function()
                 TweenService:Create(sfx, TweenInfo.new(0.3), {Volume = 0}):Play()
             end)
         end
     end
 
-    -- 🌀 Animação: girar + encolher
     local DUR = 0.45
-    local rotacaoTotal = math.rad(720)  -- 2 voltas completas
+    local rotacaoTotal = math.rad(720)
     local _, yRotInicial = portalPart.CFrame:ToOrientation()
+    local tamanhoInicial = portalPart.Size
 
-    -- Encolhe (tween)
-    TweenService:Create(
-        portalPart,
-        TweenInfo.new(DUR, Enum.EasingStyle.Quart, Enum.EasingDirection.In),
-        { Size = Vector3.new(0, 0, 0.1) }
-    ):Play()
-
-    -- Gira (loop manual pra acumular rotação)
     local inicio = tick()
     local conn
     conn = RunService.Heartbeat:Connect(function()
@@ -358,6 +386,13 @@ local function fecharPortal(portalPart)
 
         local novoY = yRotInicial + rotacaoTotal * p
         portalPart.CFrame = CFrame.new(portalPart.Position) * CFrame.Angles(0, novoY, 0)
+
+        local fator = 1 - p
+        portalPart.Size = Vector3.new(
+            tamanhoInicial.X * fator,
+            tamanhoInicial.Y * fator,
+            math.max(tamanhoInicial.Z * fator, 0.01)
+        )
     end)
 end
 
@@ -401,7 +436,6 @@ local function wipeAllPortals(comEfeito)
     return total
 end
 
--- Limpeza inicial
 for _, tag in ipairs({TAG_GEN, TAG_M1, TAG_M2, TAG_VOID, TAG_RET}) do
     for _, p in ipairs(CollectionService:GetTagged(tag)) do
         if p then p:Destroy() end
@@ -423,7 +457,7 @@ local voidMonitorConn = nil
 local localTP = nil
 
 local function criarLocalTP(posicao)
-    if localTP and localTP.Parent then localTP:Destroy() end
+    if localTP and localTP.Parent then return end
     local p = Instance.new("Part")
     p.Name = "RickLocalTP_Permanente"
     p.Size = Vector3.new(4, 1, 4)
@@ -595,9 +629,6 @@ local innerCorner = Instance.new("UICorner")
 innerCorner.CornerRadius = UDim.new(0, 5)
 innerCorner.Parent = innerScreen
 
---=============================================================
--- CABOS
---=============================================================
 local function createSaggingCable(startX, startY, endX, endY, sagDepth, wireColor, customZIndex)
     local z = customZIndex or 6
     local segments = 6
@@ -862,12 +893,15 @@ local function createPortalInstance(cframe, tag)
     CollectionService:AddTag(portalPart, tag)
     if tag == TAG_GEN then table.insert(activePortals, portalPart) end
 
-    local portalSfx = Instance.new("Sound")
-    portalSfx.SoundId = PORTAL_AUDIO_ID
-    portalSfx.Volume = 3
-    portalSfx.RollOffMaxDistance = 150
-    portalSfx.Parent = portalPart
-    portalSfx:Play()
+    local portalLoop = Instance.new("Sound")
+    portalLoop.Name = "PortalLoopSound"
+    portalLoop.SoundId = PORTAL_LOOP_SOUND_ID
+    portalLoop.Volume = 2
+    portalLoop.Looped = true
+    portalLoop.RollOffMaxDistance = 150
+    portalLoop.RollOffMode = Enum.RollOffMode.InverseTapered
+    portalLoop.Parent = portalPart
+    portalLoop:Play()
 
     local portalLight = Instance.new("PointLight")
     portalLight.Color = Color3.fromRGB(50, 255, 80)
@@ -1065,10 +1099,12 @@ local function conectarPortais(p1, p2)
             fazerTPComEfeito(root, CFrame.new(destino.Position + Vector3.new(0, 3, 0)))
         end
 
-        task.wait(0.5)
-        limparMarcacao()
-        task.wait(COOLDOWN)
-        isTeleporting = false
+        task.delay(0.5, function()
+            limparMarcacao()
+            task.delay(COOLDOWN, function()
+                isTeleporting = false
+            end)
+        end)
     end
 
     table.insert(marcacaoConns, p1.Touched:Connect(function(h) irPara(h, p2) end))
@@ -1379,6 +1415,24 @@ RunService.Heartbeat:Connect(function()
     if atpCooldown then return end
 
     local agora = os.clock()
+
+    -- ✅ NOVO: ignora se o jogador pulou recentemente
+    if agora - atpUltimoPulo < ATP.JanelaPulo then
+        atpUltPos = hrp.Position
+        atpUltimoCheck = agora
+        return
+    end
+
+    -- ✅ NOVO: ignora se está no ar (pulando/em queda controlada)
+    local state = humanoid:GetState()
+    if state == Enum.HumanoidStateType.Jumping
+        or state == Enum.HumanoidStateType.Freefall
+    then
+        atpUltPos = hrp.Position
+        atpUltimoCheck = agora
+        return
+    end
+
     if agora - atpUltimoCheck < ATP.Cooldown then return end
 
     if not atpUltPos then
@@ -1409,12 +1463,7 @@ RunService.Heartbeat:Connect(function()
         local posAnterior = atpUltPos
         antiTP_bloquear(posAnterior, character)
 
-        -- ✅ Usa a posição real pós-TP
-        if hrp and hrp.Parent then
-            atpUltPos = hrp.Position
-        else
-            atpUltPos = posAnterior + Vector3.new(0, ATP.OffsetY, 0)
-        end
+        atpUltPos = posAnterior + Vector3.new(0, ATP.OffsetY, 0)
         atpUltimoCheck = agora
 
         task.delay(0.3, function() atpCooldown = false end)
@@ -1429,6 +1478,8 @@ player.CharacterAdded:Connect(function()
     atpUltPos = nil
     atpUltimoCheck = 0
     atpUltimoRespawn = os.clock()
+    atpUltimoPulo = 0
+    atpPulando = false
 end)
 
 --=============================================================
@@ -1458,7 +1509,6 @@ local function fullCleanup()
     getgenv().AntiTP_Ativo = false
     getgenv().Marcacao_Ativo = false
 
-    -- ✅ Fecha com animação tudo que sobrou
     wipePortalsPorTag(TAG_GEN, true)
     wipePortalsPorTag(TAG_M1, true)
     wipePortalsPorTag(TAG_M2, true)
@@ -1476,7 +1526,6 @@ local function fullCleanup()
     end
     blurTween = nil
 
-    -- ✅ Remove sons órfãos do SoundService
     for _, s in ipairs(SoundService:GetChildren()) do
         if s:IsA("Sound") then
             pcall(function() s:Destroy() end)
@@ -1502,4 +1551,4 @@ closeBtn.MouseButton1Click:Connect(function()
     fullCleanup()
 end)
 
-print("✅ Rick Portal GUI v3 + Fechamento Animado (giro + encolhimento)")
+print("✅ Rick Portal GUI v5 + Anti-TP ignora pulo")
