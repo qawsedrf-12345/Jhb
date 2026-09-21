@@ -1,3 +1,6 @@
+--=============================================================
+-- RICK PRIME — Portal GUI + Marcação + Anti-TP (CORRIGIDO)
+--=============================================================
 local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -7,126 +10,142 @@ local Lighting = game:GetService("Lighting")
 local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
 
-if getgenv().RickPortalCleanup then getgenv().RickPortalCleanup() end
+-- ✅ BUG 19: cleanup de execução anterior
+if getgenv().RickPortalCleanup then pcall(getgenv().RickPortalCleanup) end
+getgenv().AntiTP_Ativo = false
+getgenv().Marcacao_Ativo = false
 
+-- ✅ BUG 21: limpa blur órfão
+for _, fx in ipairs(Lighting:GetChildren()) do
+    if fx:IsA("BlurEffect") and fx.Name == "RP_Blur" then
+        fx:Destroy()
+    end
+end
+
+--=============================================================
+-- CONSTANTES
+--=============================================================
 local PORTAL_ASSET_ID = "90557902399922"
 local PORTAL_TEXTURE = "rbxthumb://type=Asset&id=" .. PORTAL_ASSET_ID .. "&w=420&h=420"
 local PORTAL_AUDIO_ID = "rbxassetid://756847338"
 local TP_AUDIO_ID = "rbxassetid://74562584385247"
-local PORTAL_TAG = "RickPortal_C137_" .. player.UserId
-local activePortals = {}
-local connections = {}
 
--- ==========================================
--- 🔒 ANTI-TP
--- ==========================================
-getgenv().AntiTP_Ativo = false
+-- ✅ BUG 4: tags separadas por categoria
+local TAG_GEN  = "RP_Gen_"  .. player.UserId
+local TAG_M1   = "RP_M1_"   .. player.UserId
+local TAG_M2   = "RP_M2_"   .. player.UserId
+local TAG_VOID = "RP_Void_" .. player.UserId
+local TAG_RET  = "RP_Ret_"  .. player.UserId
 
-local AntiTPConfig = {
-    DistanciaMax        = 5,
-    Cooldown            = 0.2,
-    OffsetY             = 3,
-    IgnorarSeCaindo     = true,
+local activePortals = {}       -- portais genéricos
+local marcacaoP1, marcacaoP2 = nil, nil
+local marcacaoConns = {}       -- conexões da marcação
+
+--=============================================================
+-- ANTI-TP
+--=============================================================
+local ATP = {
+    DistanciaMax = 5,
+    Cooldown = 0.2,
+    OffsetY = 3,
+    IgnorarSeCaindo = true,
     VelocidadeCaindoMax = -50,
-    IgnorarJanela       = 1.5,
+    IgnorarJanela = 1.5,
 }
 
-local antiTP_ultimaPos = nil
-local antiTP_ultimoCheck = 0
-local antiTP_tpCooldown = false
-local antiTP_ultimoRespawn = 0
+local atpUltPos, atpUltimoCheck, atpCooldown, atpUltimoRespawn = nil, 0, false, 0
 
--- ==========================================
--- 🎯 MARCAÇÃO — variáveis
--- ==========================================
-getgenv().Marcacao_Ativo = false
-local marcacaoPortal1 = nil
-local marcacaoPortal2 = nil
+--=============================================================
+-- FX GUI
+--=============================================================
+local fxGui = Instance.new("ScreenGui")
+fxGui.Name = "RickPortalEffects"
+fxGui.ResetOnSpawn = false
+fxGui.IgnoreGuiInset = true
+fxGui.DisplayOrder = 999
+fxGui.Parent = player:WaitForChild("PlayerGui")
 
--- ==========================================
--- EFEITOS
--- ==========================================
-local efeitosGui = Instance.new("ScreenGui")
-efeitosGui.Name = "RickPortalEffects"
-efeitosGui.ResetOnSpawn = false
-efeitosGui.IgnoreGuiInset = true
-efeitosGui.DisplayOrder = 999
-efeitosGui.Parent = player:WaitForChild("PlayerGui")
+local function mkFrame(name, color, z)
+    local f = Instance.new("Frame")
+    f.Name = name
+    f.Size = UDim2.new(1, 0, 1, 0)
+    f.BackgroundColor3 = color
+    f.BackgroundTransparency = 1
+    f.BorderSizePixel = 0
+    f.ZIndex = z
+    f.Parent = fxGui
+    return f
+end
 
-local fadeFrame = Instance.new("Frame")
-fadeFrame.Size = UDim2.new(1, 0, 1, 0)
-fadeFrame.BackgroundColor3 = Color3.fromRGB(50, 255, 130)
-fadeFrame.BackgroundTransparency = 1
-fadeFrame.BorderSizePixel = 0
-fadeFrame.ZIndex = 1000
-fadeFrame.Parent = efeitosGui
-
-local flashFrame = Instance.new("Frame")
-flashFrame.Size = UDim2.new(1, 0, 1, 0)
-flashFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-flashFrame.BackgroundTransparency = 1
-flashFrame.BorderSizePixel = 0
-flashFrame.ZIndex = 1001
-flashFrame.Parent = efeitosGui
-
-local antiTPAlertaFrame = Instance.new("Frame")
-antiTPAlertaFrame.Size = UDim2.new(1, 0, 1, 0)
-antiTPAlertaFrame.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-antiTPAlertaFrame.BackgroundTransparency = 1
-antiTPAlertaFrame.BorderSizePixel = 0
-antiTPAlertaFrame.ZIndex = 1002
-antiTPAlertaFrame.Parent = efeitosGui
+local fadeFrame       = mkFrame("Fade",   Color3.fromRGB(50, 255, 130), 1000)
+local flashFrame      = mkFrame("Flash",  Color3.fromRGB(255, 255, 255), 1001)
+local alertaFrame     = mkFrame("Alerta", Color3.fromRGB(255, 0, 0), 1002)
 
 local ondasContainer = Instance.new("Frame")
+ondasContainer.Name = "Ondas"
 ondasContainer.Size = UDim2.new(1, 0, 1, 0)
 ondasContainer.BackgroundTransparency = 1
 ondasContainer.ZIndex = 1003
-ondasContainer.Parent = efeitosGui
+ondasContainer.Parent = fxGui
 
 local particulasContainer = Instance.new("Frame")
+particulasContainer.Name = "Particulas"
 particulasContainer.Size = UDim2.new(1, 0, 1, 0)
 particulasContainer.BackgroundTransparency = 1
 particulasContainer.ZIndex = 1005
-particulasContainer.Parent = efeitosGui
+particulasContainer.Parent = fxGui
 
+--=============================================================
+-- BLUR (com cleanup correto)
+--=============================================================
 local blurEffect = nil
+local blurTween = nil
 
 local function criarBlur(tamanho)
     if blurEffect and blurEffect.Parent then blurEffect:Destroy() end
+    if blurTween then blurTween:Cancel() blurTween = nil end
     blurEffect = Instance.new("BlurEffect")
+    blurEffect.Name = "RP_Blur"
     blurEffect.Size = 0
     blurEffect.Parent = Lighting
-    TweenService:Create(blurEffect, TweenInfo.new(0.1, Enum.EasingStyle.Quad), { Size = tamanho }):Play()
+    blurTween = TweenService:Create(blurEffect, TweenInfo.new(0.1, Enum.EasingStyle.Quad), {Size = tamanho})
+    blurTween:Play()
 end
 
 local function removerBlur(duracao)
     if not blurEffect then return end
     local b = blurEffect
-    local tween = TweenService:Create(b, TweenInfo.new(duracao or 0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = 0 })
-    tween:Play()
-    tween.Completed:Connect(function()
+    if blurTween then blurTween:Cancel() blurTween = nil end
+    blurTween = TweenService:Create(b, TweenInfo.new(duracao or 0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = 0})
+    blurTween:Play()
+    task.delay(duracao or 0.4, function()
         if b and b.Parent then b:Destroy() end
-        if blurEffect == b then blurEffect = nil end
+        if blurEffect == b then blurEffect = nil blurTween = nil end
     end)
 end
 
+--=============================================================
+-- FLASH (com cancel de tween anterior)
+--=============================================================
+local flashTween = nil
 local function flashTela(cor, duracao)
     flashFrame.BackgroundColor3 = cor
     flashFrame.BackgroundTransparency = 0
-    TweenService:Create(
+    if flashTween then flashTween:Cancel() end
+    flashTween = TweenService:Create(
         flashFrame,
         TweenInfo.new(duracao or 0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
         { BackgroundTransparency = 1 }
-    ):Play()
+    )
+    flashTween:Play()
 end
 
 local function alertaVermelho()
     task.spawn(function()
-        antiTPAlertaFrame.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-        antiTPAlertaFrame.BackgroundTransparency = 0.3
-
+        alertaFrame.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+        alertaFrame.BackgroundTransparency = 0.3
         TweenService:Create(
-            antiTPAlertaFrame,
+            alertaFrame,
             TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
             { BackgroundTransparency = 1 }
         ):Play()
@@ -146,20 +165,20 @@ local function efeitoOndas(quantidade, duracao, cor)
                 ondaFrame.ZIndex = 1003
                 ondaFrame.Parent = ondasContainer
 
-                local ondaCorner = Instance.new("UICorner")
-                ondaCorner.CornerRadius = UDim.new(1, 0)
-                ondaCorner.Parent = ondaFrame
+                local c = Instance.new("UICorner")
+                c.CornerRadius = UDim.new(1, 0)
+                c.Parent = ondaFrame
 
-                local ondaStroke = Instance.new("UIStroke")
-                ondaStroke.Color = cor
-                ondaStroke.Thickness = 5
-                ondaStroke.Transparency = 0.3
-                ondaStroke.Parent = ondaFrame
+                local s = Instance.new("UIStroke")
+                s.Color = cor
+                s.Thickness = 5
+                s.Transparency = 0.3
+                s.Parent = ondaFrame
 
                 TweenService:Create(ondaFrame, TweenInfo.new(duracao, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
                     Size = UDim2.new(3, 0, 3, 0)
                 }):Play()
-                TweenService:Create(ondaStroke, TweenInfo.new(duracao, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                TweenService:Create(s, TweenInfo.new(duracao, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
                     Transparency = 1, Thickness = 1
                 }):Play()
 
@@ -180,20 +199,21 @@ local function efeitoParticulas(quantidade, cor)
                 part.Position = UDim2.new(0.5, 0, 0.5, 0)
                 part.AnchorPoint = Vector2.new(0.5, 0.5)
                 part.BackgroundColor3 = cor
-                part.BackgroundTransparency = math.random(0.1, 0.4)
+                part.BackgroundTransparency = math.random(10, 40) / 100
                 part.BorderSizePixel = 0
                 part.ZIndex = 1005
                 part.Parent = particulasContainer
 
-                local corner = Instance.new("UICorner")
-                corner.CornerRadius = UDim.new(1, 0)
-                corner.Parent = part
+                local c = Instance.new("UICorner")
+                c.CornerRadius = UDim.new(1, 0)
+                c.Parent = part
 
                 local angulo = math.random() * math.pi * 2
                 local distancia = math.random(80, 150) / 100
                 local tween = TweenService:Create(part, TweenInfo.new(math.random(40, 70) / 100, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
                     Position = UDim2.new(0.5 + math.cos(angulo) * distancia, 0, 0.5 + math.sin(angulo) * distancia, 0),
-                    BackgroundTransparency = 1, Size = UDim2.new(0, 0, 0, 0)
+                    BackgroundTransparency = 1,
+                    Size = UDim2.new(0, 0, 0, 0)
                 })
                 tween:Play()
                 tween.Completed:Wait()
@@ -220,9 +240,31 @@ local function cameraShake(intensidade, duracao)
     end)
 end
 
+--=============================================================
+-- ✅ BUG 1/2: playTPSound movido pra ANTES e virou local
+--=============================================================
+local function playTPSound()
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    local s = Instance.new("Sound")
+    s.SoundId = TP_AUDIO_ID
+    s.Volume = 3
+    s.Parent = SoundService
+    s:Play()
+    task.delay(5, function()
+        if s and s.Parent then s:Destroy() end
+    end)
+end
+
+--=============================================================
+-- EFEITO TP (com guard contra múltiplas execuções)
+--=============================================================
 local COR_TP = Color3.fromRGB(50, 255, 130)
+local efeitoTPAtivo = false
 
 local function efeitoTP()
+    if efeitoTPAtivo then return end
+    efeitoTPAtivo = true
     task.spawn(function()
         fadeFrame.BackgroundColor3 = COR_TP
         fadeFrame.BackgroundTransparency = 0.5
@@ -230,7 +272,9 @@ local function efeitoTP()
         task.wait(0.04)
         flashTela(Color3.fromRGB(255, 255, 255), 0.18)
 
-        TweenService:Create(fadeFrame, TweenInfo.new(0.55, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 1 }):Play()
+        TweenService:Create(fadeFrame, TweenInfo.new(0.55, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            BackgroundTransparency = 1
+        }):Play()
 
         efeitoOndas(3, 0.6, COR_TP)
         efeitoParticulas(50, COR_TP)
@@ -238,23 +282,22 @@ local function efeitoTP()
 
         criarBlur(8)
         removerBlur(0.4)
+
+        task.wait(0.6)
+        efeitoTPAtivo = false
     end)
 end
 
--- ==========================================
--- FUNÇÃO UNIFICADA: TP COM EFEITO COMPLETO
--- Usada por TODOS os portais do sistema
--- ==========================================
+--=============================================================
+-- TP COM EFEITO
+--=============================================================
 local function fazerTPComEfeito(root, destinoCFrame)
-    if not root then return end
-
-    -- Som + efeito
+    if not root or not root.Parent then return end
     playTPSound()
     efeitoTP()
-
     task.spawn(function()
         task.wait(0.2)
-
+        if not root or not root.Parent then return end
         local rotacaoAtual = root.CFrame - root.CFrame.Position
         root.CFrame = destinoCFrame * rotacaoAtual
         root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
@@ -262,35 +305,55 @@ local function fazerTPComEfeito(root, destinoCFrame)
     end)
 end
 
--- ==========================================
--- WIPE PORTALS
--- ==========================================
-local function wipeAllPortals(comEfeito)
-    local tinhaPortais = #activePortals > 0
+--=============================================================
+-- ✅ BUG 22: WIPE sem duplicatas
+--=============================================================
+local function wipePortalsPorTag(tag, comEfeito)
+    local portais = {}
+    local vistos = {}
 
-    for _, portalPart in ipairs(activePortals) do
-        if portalPart and portalPart.Parent then
-            portalPart:Destroy()
-        end
-    end
-    table.clear(activePortals)
-    for _, portalPart in ipairs(CollectionService:GetTagged(PORTAL_TAG)) do
-        if portalPart then
-            portalPart:Destroy()
+    for _, p in ipairs(CollectionService:GetTagged(tag)) do
+        if p and not vistos[p] then
+            vistos[p] = true
+            table.insert(portais, p)
         end
     end
 
-    if comEfeito and tinhaPortais then
+    for _, p in ipairs(portais) do
+        if p and p.Parent then
+            p:Destroy()
+        end
+    end
+
+    if comEfeito and #portais > 0 then
         efeitoTP()
+    end
+
+    return #portais
+end
+
+local function wipeAllPortals(comEfeito)
+    local total = 0
+    total = total + wipePortalsPorTag(TAG_GEN, comEfeito)
+    table.clear(activePortals)
+    return total
+end
+
+-- Limpeza inicial de TODAS as tags antigas
+for _, tag in ipairs({TAG_GEN, TAG_M1, TAG_M2, TAG_VOID, TAG_RET}) do
+    for _, p in ipairs(CollectionService:GetTagged(tag)) do
+        if p then p:Destroy() end
     end
 end
 
-wipeAllPortals(false)
-if CoreGui:FindFirstChild("RickPortalGUI") then CoreGui.RickPortalGUI:Destroy() end
+-- ✅ BUG 20: cleanup de GUI antiga
+if CoreGui:FindFirstChild("RickPortalGUI") then
+    CoreGui.RickPortalGUI:Destroy()
+end
 
--- ==========================================
--- VOID PLACE + LOCAL DE TP
--- ==========================================
+--=============================================================
+-- ✅ BUG 6: VOID place + monitor (com task.defer)
+--=============================================================
 local VOID_Y = -500
 local VOID_CENTRO = Vector3.new(0, VOID_Y, 0)
 local VOID_TAMANHO = 100
@@ -298,24 +361,24 @@ local voidPlaceFolder = nil
 local voidMonitorConn = nil
 local localTP = nil
 
+-- ✅ BUG 5: criarLocalTP destrói o anterior
 local function criarLocalTP(posicao)
-    local localPart = Instance.new("Part")
-    localPart.Name = "RickLocalTP_Permanente"
-    localPart.Size = Vector3.new(4, 1, 4)
-    localPart.Position = posicao
-    localPart.Anchored = true
-    localPart.CanCollide = false
-    localPart.CanTouch = false
-    localPart.CanQuery = false
-    localPart.Transparency = 1
-    localPart.Parent = workspace
-    localTP = localPart
+    if localTP and localTP.Parent then localTP:Destroy() end
+    local p = Instance.new("Part")
+    p.Name = "RickLocalTP_Permanente"
+    p.Size = Vector3.new(4, 1, 4)
+    p.Position = posicao
+    p.Anchored = true
+    p.CanCollide = false
+    p.CanTouch = false
+    p.CanQuery = false
+    p.Transparency = 1
+    p.Parent = workspace
+    localTP = p
 end
 
 local function deletarLocalTP()
-    if localTP and localTP.Parent then
-        localTP:Destroy()
-    end
+    if localTP and localTP.Parent then localTP:Destroy() end
     localTP = nil
 end
 
@@ -370,8 +433,9 @@ local function deletarVoidPlace()
         voidPlaceFolder = nil
     end
     if voidMonitorConn then
-        voidMonitorConn:Disconnect()
+        local conn = voidMonitorConn
         voidMonitorConn = nil
+        conn:Disconnect()
     end
 end
 
@@ -383,9 +447,8 @@ local function monitorarSaidaDoVoid()
 
         local char = player.Character
         if not char then
-            deletarVoidPlace()
-            deletarLocalTP()
-            wipeAllPortals(false)
+            task.defer(deletarVoidPlace)
+            task.defer(deletarLocalTP)
             return
         end
 
@@ -394,30 +457,27 @@ local function monitorarSaidaDoVoid()
         if not hrp then return end
 
         if humanoid and humanoid.Health <= 0 then
-            deletarVoidPlace()
-            deletarLocalTP()
-            wipeAllPortals(false)
+            task.defer(deletarVoidPlace)
+            task.defer(deletarLocalTP)
             return
         end
 
         local pos = hrp.Position
-
         local foraX = math.abs(pos.X) > VOID_TAMANHO + 20
         local foraZ = math.abs(pos.Z) > VOID_TAMANHO + 20
         local caiuMuito = pos.Y < VOID_Y - 100
         local subiuMuito = pos.Y > VOID_Y + 200
 
         if foraX or foraZ or caiuMuito or subiuMuito then
-            deletarVoidPlace()
-            deletarLocalTP()
-            wipeAllPortals(false)
+            task.defer(deletarVoidPlace)
+            task.defer(deletarLocalTP)
         end
     end)
 end
 
--- ==========================================
+--=============================================================
 -- UI SETUP
--- ==========================================
+--=============================================================
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "RickPortalGUI"
 screenGui.ResetOnSpawn = false
@@ -436,10 +496,11 @@ local uiCorner = Instance.new("UICorner")
 uiCorner.CornerRadius = UDim.new(0, 7)
 uiCorner.Parent = mainFrame
 
-local casingStroke = Instance.new("UIStroke")
-casingStroke.Color = Color3.fromRGB(20, 22, 25)
-casingStroke.Thickness = 2
-casingStroke.Parent = mainFrame
+-- ✅ BUG 15: apenas UMA UIStroke no mainFrame
+local mainStroke = Instance.new("UIStroke")
+mainStroke.Color = Color3.fromRGB(40, 220, 90)
+mainStroke.Thickness = 1.5
+mainStroke.Parent = mainFrame
 
 local function addScrew(posX, posY)
     local screw = Instance.new("Frame")
@@ -447,9 +508,9 @@ local function addScrew(posX, posY)
     screw.Position = UDim2.new(posX.Scale, posX.Offset, posY.Scale, posY.Offset)
     screw.BackgroundColor3 = Color3.fromRGB(90, 95, 100)
     screw.Parent = mainFrame
-    local sCorner = Instance.new("UICorner")
-    sCorner.CornerRadius = UDim.new(1, 0)
-    sCorner.Parent = screw
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(1, 0)
+    c.Parent = screw
     local slot = Instance.new("Frame")
     slot.Size = UDim2.new(0, 3, 0, 1)
     slot.Position = UDim2.new(0.5, -1, 0.5, 0)
@@ -458,6 +519,7 @@ local function addScrew(posX, posY)
     slot.Rotation = math.random(0, 180)
     slot.Parent = screw
 end
+
 addScrew(UDim.new(0, 3), UDim.new(0, 3))
 addScrew(UDim.new(1, -8), UDim.new(0, 3))
 addScrew(UDim.new(0, 3), UDim.new(1, -8))
@@ -474,11 +536,9 @@ local innerCorner = Instance.new("UICorner")
 innerCorner.CornerRadius = UDim.new(0, 5)
 innerCorner.Parent = innerScreen
 
-local innerStroke = Instance.new("UIStroke")
-innerStroke.Color = Color3.fromRGB(40, 220, 90)
-innerStroke.Thickness = 1.5
-innerStroke.Parent = mainFrame
-
+--=============================================================
+-- CABOS
+--=============================================================
 local function createSaggingCable(startX, startY, endX, endY, sagDepth, wireColor, customZIndex)
     local z = customZIndex or 6
     local segments = 6
@@ -494,8 +554,9 @@ local function createSaggingCable(startX, startY, endX, endY, sagDepth, wireColo
         local x2, y2 = getPoint(t2)
         local dx = x2 - x1
         local dy = y2 - y1
-        local dist = math.sqrt(dx*dx + dy*dy)
-        local angle = math.deg(math.atan2(dy, dx))
+        local dist = math.sqrt(dx * dx + dy * dy)
+        -- ✅ BUG 16: math.atan(dy, dx) em vez de math.atan2
+        local angle = math.deg(math.atan(dy, dx))
 
         local seg = Instance.new("Frame")
         seg.Size = UDim2.new(0, dist + 1, 0, 2)
@@ -520,35 +581,37 @@ local function createSaggingCable(startX, startY, endX, endY, sagDepth, wireColo
             task.spawn(function()
                 while spark and spark.Parent do
                     spark.Visible = math.random() > 0.3
-                    spark.BackgroundColor3 = math.random() > 0.5 and Color3.fromRGB(255, 100, 0) or Color3.fromRGB(255, 220, 50)
+                    spark.BackgroundColor3 = math.random() > 0.5
+                        and Color3.fromRGB(255, 100, 0)
+                        or Color3.fromRGB(255, 220, 50)
                     task.wait(math.random(10, 25) / 100)
                 end
             end)
         end
     end
 end
+
 createSaggingCable(4, 0, 66, 3, 8, Color3.fromRGB(140, 35, 35), 5)
 createSaggingCable(3, 0, 44, 4, 10, Color3.fromRGB(220, 45, 45), 6)
 
 task.spawn(function()
     while innerScreen and innerScreen.Parent do
         task.wait(math.random(3, 8))
-        innerStroke.Color = Color3.fromRGB(255, 255, 200)
+        mainStroke.Color = Color3.fromRGB(255, 255, 200)
         task.wait(0.05)
-        innerStroke.Color = Color3.fromRGB(40, 220, 90)
+        mainStroke.Color = Color3.fromRGB(40, 220, 90)
         task.wait(0.1)
-        innerStroke.Color = Color3.fromRGB(255, 140, 0)
+        mainStroke.Color = Color3.fromRGB(255, 140, 0)
         task.wait(0.05)
-        innerStroke.Color = Color3.fromRGB(40, 220, 90)
+        mainStroke.Color = Color3.fromRGB(40, 220, 90)
     end
 end)
 
-local slideInTween = TweenService:Create(
+TweenService:Create(
     mainFrame,
     TweenInfo.new(1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
-    {Position = UDim2.new(0, 15, 0.35, -87)}
-)
-slideInTween:Play()
+    { Position = UDim2.new(0, 15, 0.35, -87) }
+):Play()
 
 local title = Instance.new("TextLabel")
 title.Size, title.Position = UDim2.new(1, 0, 0, 13), UDim2.new(0, 0, 0, 2)
@@ -573,7 +636,7 @@ local rickQuotes = {
     "\"Existence is pain, Jerry!\"",
     "\"Aw, geez, are we in a script?\"",
     "\"Science is art, Morty.\"",
-    "\"Boom! Dimensional travelers!\""
+    "\"Boom! Dimensional travelers!\"",
 }
 
 local function setRandomQuote()
@@ -590,13 +653,13 @@ local function createButton(text, yPos)
     btn.Font = Enum.Font.GothamBold
     btn.TextSize = 6
     btn.Parent = innerScreen
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 3)
-    corner.Parent = btn
-    local btnStroke = Instance.new("UIStroke")
-    btnStroke.Color = Color3.fromRGB(40, 160, 70)
-    btnStroke.Thickness = 1
-    btnStroke.Parent = btn
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, 3)
+    c.Parent = btn
+    local s = Instance.new("UIStroke")
+    s.Color = Color3.fromRGB(40, 160, 70)
+    s.Thickness = 1
+    s.Parent = btn
     btn.MouseEnter:Connect(function()
         btn.BackgroundColor3 = Color3.fromRGB(30, 55, 35)
     end)
@@ -609,17 +672,18 @@ local function createButton(text, yPos)
 end
 
 local tpPlayerBtn = createButton("Select Player", 34)
-local clearBtn = createButton("Clear Portals", 53)
-local voidBtn = createButton("🌑 Void", 72)
+local clearBtn    = createButton("Clear Portals", 53)
+local voidBtn     = createButton("🌑 Void", 72)
 local marcacaoBtn = createButton("🎯 Marcação [0/2]", 91)
-local antiTPBtn = createButton("🔒 Anti-TP [OFF]", 110)
-local closeBtn = createButton("Close", 134)
+local antiTPBtn   = createButton("🔒 Anti-TP [OFF]", 110)
+local closeBtn    = createButton("Close", 134)
+
 closeBtn.BackgroundColor3 = Color3.fromRGB(100, 25, 25)
 closeBtn.TextColor3 = Color3.fromRGB(255, 200, 200)
 local closeStroke = closeBtn:FindFirstChildOfClass("UIStroke")
 if closeStroke then closeStroke.Color = Color3.fromRGB(200, 50, 50) end
 
--- Estilização do Void
+-- Void styling
 voidBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 voidBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
 local voidStroke = voidBtn:FindFirstChildOfClass("UIStroke")
@@ -633,7 +697,7 @@ voidBtn.MouseLeave:Connect(function()
     end
 end)
 
--- Estilização do Marcação
+-- Marcação styling
 marcacaoBtn.BackgroundColor3 = Color3.fromRGB(255, 200, 50)
 marcacaoBtn.TextColor3 = Color3.fromRGB(50, 30, 0)
 local marcacaoStroke = marcacaoBtn:FindFirstChildOfClass("UIStroke")
@@ -652,12 +716,13 @@ marcacaoBtn.MouseLeave:Connect(function()
     end
 end)
 
--- Estilização do Anti-TP
+-- Anti-TP styling
 antiTPBtn.BackgroundColor3 = Color3.fromRGB(100, 25, 25)
 antiTPBtn.TextColor3 = Color3.fromRGB(255, 200, 200)
 local antiTPStroke = antiTPBtn:FindFirstChildOfClass("UIStroke")
 if antiTPStroke then antiTPStroke.Color = Color3.fromRGB(200, 50, 50) end
 
+-- Footer
 local footerLabel = Instance.new("TextLabel")
 footerLabel.Size = UDim2.new(1, 0, 0, 8)
 footerLabel.Position = UDim2.new(0, 0, 1, -9)
@@ -668,6 +733,9 @@ footerLabel.Font = Enum.Font.Code
 footerLabel.TextSize = 5
 footerLabel.Parent = innerScreen
 
+--=============================================================
+-- PLAYER PANEL
+--=============================================================
 local slidingPanel = Instance.new("Frame")
 slidingPanel.Size = UDim2.new(0, 0, 1, 0)
 slidingPanel.Position = UDim2.new(1, -5, 0, 0)
@@ -721,39 +789,11 @@ uiListLayout.Parent = scrollingList
 
 local panelOpen = false
 
--- ==========================================
--- TP SOUND
--- ==========================================
-function playTPSound()
-    local char = player.Character
-    local root = char and char:FindFirstChild("HumanoidRootPart")
-    if root then
-        local tpSound = Instance.new("Sound")
-        tpSound.SoundId = TP_AUDIO_ID
-        tpSound.Volume = 3
-        tpSound.Parent = root
-        tpSound:Play()
-        task.spawn(function()
-            tpSound.Ended:Wait()
-            tpSound:Destroy()
-        end)
-    else
-        local tpSound = Instance.new("Sound")
-        tpSound.SoundId = TP_AUDIO_ID
-        tpSound.Volume = 3
-        tpSound.Parent = SoundService
-        tpSound:Play()
-        task.spawn(function()
-            tpSound.Ended:Wait()
-            tpSound:Destroy()
-        end)
-    end
-end
-
--- ==========================================
--- PORTAL INSTANCE
--- ==========================================
-local function createPortalInstance(cframe)
+--=============================================================
+-- PORTAL INSTANCE (com tag parametrizável)
+--=============================================================
+local function createPortalInstance(cframe, tag)
+    tag = tag or TAG_GEN
     local pos = cframe.Position
     local _, yRot, _ = cframe:ToOrientation()
     local verticalCFrame = CFrame.new(pos) * CFrame.Angles(0, yRot, 0)
@@ -765,8 +805,8 @@ local function createPortalInstance(cframe)
     portalPart.CanCollide = false
     portalPart.Transparency = 1
     portalPart.Parent = workspace
-    CollectionService:AddTag(portalPart, PORTAL_TAG)
-    table.insert(activePortals, portalPart)
+    CollectionService:AddTag(portalPart, tag)
+    if tag == TAG_GEN then table.insert(activePortals, portalPart) end
 
     local portalSfx = Instance.new("Sound")
     portalSfx.SoundId = PORTAL_AUDIO_ID
@@ -783,7 +823,10 @@ local function createPortalInstance(cframe)
 
     local sparks = Instance.new("ParticleEmitter")
     sparks.Color = ColorSequence.new(Color3.fromRGB(50, 255, 80))
-    sparks.Size = NumberSequence.new({NumberSequenceKeypoint.new(0, 0.3), NumberSequenceKeypoint.new(1, 0)})
+    sparks.Size = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0.3),
+        NumberSequenceKeypoint.new(1, 0)
+    })
     sparks.Lifetime = NumberRange.new(0.5, 1.2)
     sparks.Rate = 25
     sparks.Speed = NumberRange.new(3, 7)
@@ -799,26 +842,28 @@ local function createPortalInstance(cframe)
         surf.LightInfluence = 0
         surf.Parent = portalPart
 
-        local frontSwirl = Instance.new("ImageLabel")
-        frontSwirl.Size = UDim2.new(1, 0, 1, 0)
-        frontSwirl.BackgroundTransparency = 1
-        frontSwirl.Image = PORTAL_TEXTURE
-        frontSwirl.AnchorPoint = Vector2.new(0.5, 0.5)
-        frontSwirl.Position = UDim2.new(0.5, 0, 0.5, 0)
-        frontSwirl.Parent = surf
+        local img = Instance.new("ImageLabel")
+        img.Size = UDim2.new(1, 0, 1, 0)
+        img.BackgroundTransparency = 1
+        img.Image = PORTAL_TEXTURE
+        img.AnchorPoint = Vector2.new(0.5, 0.5)
+        img.Position = UDim2.new(0.5, 0, 0.5, 0)
+        img.Parent = surf
 
-        local corner2 = Instance.new("UICorner")
-        corner2.CornerRadius = UDim.new(0.5, 0)
-        corner2.Parent = frontSwirl
-        return frontSwirl
+        local c = Instance.new("UICorner")
+        c.CornerRadius = UDim.new(0.5, 0)
+        c.Parent = img
+        return img
     end
 
     local fFront = createSurfaceFace(Enum.NormalId.Front)
     local bFront = createSurfaceFace(Enum.NormalId.Back)
 
-    local tweenInfo = TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-    local openTween = TweenService:Create(portalPart, tweenInfo, {Size = Vector3.new(7, 7, 0.1)})
-    openTween:Play()
+    TweenService:Create(
+        portalPart,
+        TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+        { Size = Vector3.new(7, 7, 0.1) }
+    ):Play()
 
     task.spawn(function()
         while portalPart and portalPart.Parent do
@@ -832,31 +877,44 @@ local function createPortalInstance(cframe)
     return portalPart
 end
 
--- ==========================================
--- VOID PORTAL
--- ==========================================
+--=============================================================
+-- ✅ BUG 3/8: VOID com reset de texto e sem task.wait longo
+--=============================================================
 local function abrirPortalVoid()
     setRandomQuote()
     wipeAllPortals(false)
     panelOpen = false
     tpPlayerBtn:SetAttribute("ActiveState", false)
-    TweenService:Create(slidingPanel, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Size = UDim2.new(0, 0, 1, 0)}):Play()
+    TweenService:Create(
+        slidingPanel,
+        TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+        { Size = UDim2.new(0, 0, 1, 0) }
+    ):Play()
     tpPlayerBtn.BackgroundColor3 = Color3.fromRGB(20, 35, 25)
 
     local char = player.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
     if not root then return end
 
-    criarLocalTP(root.Position + Vector3.new(0, 0, 0))
+    criarLocalTP(root.Position)
 
-    local voidPortal = createPortalInstance(root.CFrame * CFrame.new(0, 0, -5))
+    local voidPortal = createPortalInstance(root.CFrame * CFrame.new(0, 0, -5), TAG_VOID)
     voidBtn.Text = "Enter Void Portal!"
 
+    -- ✅ BUG 8: reset do texto após 15s se não entrar
+    local resetAtivo = true
+    task.delay(15, function()
+        if resetAtivo and voidPortal and voidPortal.Parent then
+            voidBtn.Text = "🌑 Void"
+            voidPortal:Destroy()
+        end
+    end)
+
     local touched = false
-    local touchConn
-    touchConn = voidPortal.Touched:Connect(function(hit)
+    voidPortal.Touched:Connect(function(hit)
         if touched or hit.Parent ~= char then return end
         touched = true
+        resetAtivo = false
 
         playTPSound()
         efeitoTP()
@@ -868,16 +926,20 @@ local function abrirPortalVoid()
             monitorarSaidaDoVoid()
 
             local destino = CFrame.new(VOID_CENTRO.X, VOID_CENTRO.Y + 5, VOID_CENTRO.Z)
-            root.CFrame = destino
+            if root and root.Parent then
+                root.CFrame = destino
+            end
 
             task.wait(0.3)
 
-            local portalVolta = createPortalInstance(CFrame.new(VOID_CENTRO.X, VOID_CENTRO.Y + 3, VOID_CENTRO.Z - 8))
+            local portalVolta = createPortalInstance(
+                CFrame.new(VOID_CENTRO.X, VOID_CENTRO.Y + 3, VOID_CENTRO.Z - 8),
+                TAG_RET
+            )
             voidBtn.Text = "🌑 Void"
 
             local voltouTouched = false
-            local voltouConn
-            voltouConn = portalVolta.Touched:Connect(function(hitBack)
+            portalVolta.Touched:Connect(function(hitBack)
                 if voltouTouched or hitBack.Parent ~= char then return end
                 voltouTouched = true
 
@@ -887,14 +949,19 @@ local function abrirPortalVoid()
                 task.spawn(function()
                     task.wait(0.2)
 
+                    -- ✅ BUG 7: re-fetch do root dentro do callback
+                    local currentChar = player.Character
+                    local currentRoot = currentChar and currentChar:FindFirstChild("HumanoidRootPart")
+                    if not currentRoot then return end
+
                     if localTP and localTP.Parent then
-                        root.CFrame = CFrame.new(localTP.Position + Vector3.new(0, 5, 0))
+                        currentRoot.CFrame = CFrame.new(localTP.Position + Vector3.new(0, 5, 0))
                     else
                         local spawnLocal = workspace:FindFirstChildOfClass("SpawnLocation")
                         if spawnLocal then
-                            root.CFrame = spawnLocal.CFrame + Vector3.new(0, 5, 0)
+                            currentRoot.CFrame = spawnLocal.CFrame + Vector3.new(0, 5, 0)
                         else
-                            root.CFrame = CFrame.new(0, 50, 0)
+                            currentRoot.CFrame = CFrame.new(0, 50, 0)
                         end
                     end
 
@@ -902,29 +969,26 @@ local function abrirPortalVoid()
 
                     deletarVoidPlace()
                     deletarLocalTP()
-                    wipeAllPortals(false)
-                    if voltouConn then voltouConn:Disconnect() end
+                    wipePortalsPorTag(TAG_VOID, false)
+                    wipePortalsPorTag(TAG_RET, false)
                 end)
             end)
         end)
-
-        task.wait(1)
-        if touchConn then touchConn:Disconnect() end
     end)
 end
 
--- ==========================================
--- 🎯 MARCAÇÃO — 2 mecânicas
--- ==========================================
+--=============================================================
+-- ✅ BUG 11: MARCAÇÃO — estado 2 reseta
+--=============================================================
 local function limparMarcacao()
-    if marcacaoPortal1 and marcacaoPortal1.Parent then
-        marcacaoPortal1:Destroy()
+    for _, conn in ipairs(marcacaoConns) do
+        if conn and conn.Disconnect then pcall(function() conn:Disconnect() end) end
     end
-    if marcacaoPortal2 and marcacaoPortal2.Parent then
-        marcacaoPortal2:Destroy()
-    end
-    marcacaoPortal1 = nil
-    marcacaoPortal2 = nil
+    table.clear(marcacaoConns)
+
+    if marcacaoP1 and marcacaoP1.Parent then marcacaoP1:Destroy() end
+    if marcacaoP2 and marcacaoP2.Parent then marcacaoP2:Destroy() end
+    marcacaoP1, marcacaoP2 = nil, nil
 
     marcacaoBtn.Text = "🎯 Marcação [0/2]"
     marcacaoBtn.BackgroundColor3 = Color3.fromRGB(255, 200, 50)
@@ -934,57 +998,29 @@ local function limparMarcacao()
     getgenv().Marcacao_Ativo = false
 end
 
-local function conectarPortais(portal1, portal2)
+local function conectarPortais(p1, p2)
     local isTeleporting = false
-    local TELEPORT_COOLDOWN = 1.0
+    local COOLDOWN = 1.0
 
-    -- Portal 1 → Portal 2
-    local conn1
-    conn1 = portal1.Touched:Connect(function(hit)
+    local function irPara(hit, destino)
         local char = player.Character
         if isTeleporting or not char or hit.Parent ~= char then return end
+        if not destino or not destino.Parent then return end
         isTeleporting = true
 
         local root = char:FindFirstChild("HumanoidRootPart")
-        if not root then
-            isTeleporting = false
-            return
-        end
-
-        if portal2 and portal2.Parent then
-            fazerTPComEfeito(root, CFrame.new(portal2.Position + Vector3.new(0, 3, 0)))
+        if root then
+            fazerTPComEfeito(root, CFrame.new(destino.Position + Vector3.new(0, 3, 0)))
         end
 
         task.wait(0.5)
         limparMarcacao()
-
-        task.wait(TELEPORT_COOLDOWN)
+        task.wait(COOLDOWN)
         isTeleporting = false
-    end)
+    end
 
-    -- Portal 2 → Portal 1
-    local conn2
-    conn2 = portal2.Touched:Connect(function(hit)
-        local char = player.Character
-        if isTeleporting or not char or hit.Parent ~= char then return end
-        isTeleporting = true
-
-        local root = char:FindFirstChild("HumanoidRootPart")
-        if not root then
-            isTeleporting = false
-            return
-        end
-
-        if portal1 and portal1.Parent then
-            fazerTPComEfeito(root, CFrame.new(portal1.Position + Vector3.new(0, 3, 0)))
-        end
-
-        task.wait(0.5)
-        limparMarcacao()
-
-        task.wait(TELEPORT_COOLDOWN)
-        isTeleporting = false
-    end)
+    table.insert(marcacaoConns, p1.Touched:Connect(function(h) irPara(h, p2) end))
+    table.insert(marcacaoConns, p2.Touched:Connect(function(h) irPara(h, p1) end))
 end
 
 local function clicarMarcacao()
@@ -996,17 +1032,11 @@ local function clicarMarcacao()
 
     if state == 0 then
         setRandomQuote()
+        if marcacaoP1 and marcacaoP1.Parent then marcacaoP1:Destroy() end
+        if marcacaoP2 and marcacaoP2.Parent then marcacaoP2:Destroy() end
+        marcacaoP1, marcacaoP2 = nil, nil
 
-        if marcacaoPortal1 and marcacaoPortal1.Parent then
-            marcacaoPortal1:Destroy()
-        end
-        if marcacaoPortal2 and marcacaoPortal2.Parent then
-            marcacaoPortal2:Destroy()
-        end
-        marcacaoPortal1 = nil
-        marcacaoPortal2 = nil
-
-        marcacaoPortal1 = createPortalInstance(root.CFrame * CFrame.new(0, 0, -5))
+        marcacaoP1 = createPortalInstance(root.CFrame * CFrame.new(0, 0, -5), TAG_M1)
 
         marcacaoBtn.Text = "🎯 Marcação [1/2]"
         marcacaoBtn.BackgroundColor3 = Color3.fromRGB(255, 140, 0)
@@ -1017,13 +1047,9 @@ local function clicarMarcacao()
 
     elseif state == 1 then
         setRandomQuote()
+        if not marcacaoP1 or not marcacaoP1.Parent then limparMarcacao() return end
 
-        if not marcacaoPortal1 or not marcacaoPortal1.Parent then
-            limparMarcacao()
-            return
-        end
-
-        marcacaoPortal2 = createPortalInstance(root.CFrame * CFrame.new(0, 0, -5))
+        marcacaoP2 = createPortalInstance(root.CFrame * CFrame.new(0, 0, -5), TAG_M2)
 
         marcacaoBtn.Text = "🎯 Marcação [2/2]"
         marcacaoBtn.BackgroundColor3 = Color3.fromRGB(40, 140, 50)
@@ -1031,13 +1057,18 @@ local function clicarMarcacao()
         if marcacaoStroke then marcacaoStroke.Color = Color3.fromRGB(80, 200, 100) end
         marcacaoBtn:SetAttribute("ActiveState", 2)
 
-        conectarPortais(marcacaoPortal1, marcacaoPortal2)
+        conectarPortais(marcacaoP1, marcacaoP2)
+
+    elseif state == 2 then
+        -- ✅ BUG 11: reset
+        setRandomQuote()
+        limparMarcacao()
     end
 end
 
--- ==========================================
+--=============================================================
 -- PLAYER LIST
--- ==========================================
+--=============================================================
 local function refreshPlayerList()
     for _, child in ipairs(scrollingList:GetChildren()) do
         if child:IsA("TextButton") then child:Destroy() end
@@ -1068,7 +1099,7 @@ local function refreshPlayerList()
             task.spawn(function()
                 local isFriend = false
                 pcall(function() isFriend = player:IsFriendsWith(p.UserId) end)
-                if isFriend then
+                if isFriend and pBtn and pBtn.Parent then
                     pBtn.BackgroundColor3 = Color3.fromRGB(45, 20, 20)
                     pBtn.TextColor3 = Color3.fromRGB(255, 120, 120)
                     bStroke.Color = Color3.fromRGB(150, 40, 40)
@@ -1081,21 +1112,34 @@ local function refreshPlayerList()
                 wipeAllPortals(false)
                 panelOpen = false
                 tpPlayerBtn:SetAttribute("ActiveState", false)
-                TweenService:Create(slidingPanel, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Size = UDim2.new(0, 0, 1, 0)}):Play()
+                TweenService:Create(
+                    slidingPanel,
+                    TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+                    { Size = UDim2.new(0, 0, 1, 0) }
+                ):Play()
                 tpPlayerBtn.BackgroundColor3 = Color3.fromRGB(20, 35, 25)
 
                 local char = player.Character
                 local root = char and char:FindFirstChild("HumanoidRootPart")
                 if not root then return end
 
-                local tpPortal = createPortalInstance(root.CFrame * CFrame.new(0, 0, -5))
+                local tpPortal = createPortalInstance(root.CFrame * CFrame.new(0, 0, -5), TAG_GEN)
                 tpPlayerBtn.Text = "Enter Portal!"
 
+                -- ✅ reset em 15s
+                local resetAtivo = true
+                task.delay(15, function()
+                    if resetAtivo and tpPortal and tpPortal.Parent then
+                        tpPlayerBtn.Text = "Select Player"
+                        tpPortal:Destroy()
+                    end
+                end)
+
                 local touched = false
-                local touchConn
-                touchConn = tpPortal.Touched:Connect(function(hit)
+                tpPortal.Touched:Connect(function(hit)
                     if touched or hit.Parent ~= char then return end
                     touched = true
+                    resetAtivo = false
                     tpPlayerBtn.Text = "Jumping..."
 
                     playTPSound()
@@ -1104,8 +1148,7 @@ local function refreshPlayerList()
                     task.spawn(function()
                         task.wait(0.2)
 
-                        local targetPlayer = p
-                        local targetChar = targetPlayer.Character
+                        local targetChar = p.Character
                         if not targetChar then
                             tpPlayerBtn.Text = "No Target!"
                             task.wait(1.5)
@@ -1115,33 +1158,42 @@ local function refreshPlayerList()
 
                         local targetPivot = targetChar:GetPivot()
                         local actualRoot = targetChar:FindFirstChild("HumanoidRootPart") or targetChar.PrimaryPart
+
+                        -- ✅ re-fetch do root
+                        local currentChar = player.Character
+                        local currentRoot = currentChar and currentChar:FindFirstChild("HumanoidRootPart")
+                        if not currentRoot then return end
+
                         if actualRoot then
-                            root.CFrame = actualRoot.CFrame * CFrame.new(0, 0, -4)
+                            currentRoot.CFrame = actualRoot.CFrame * CFrame.new(0, 0, -4)
                             tpPlayerBtn.Text = "Select Player"
                         else
-                            root.CFrame = targetPivot * CFrame.new(0, 5, 0)
-                            root.Anchored = true
-                            pcall(function() player:RequestStreamAroundAsync(targetPivot.Position) end)
+                            currentRoot.CFrame = targetPivot * CFrame.new(0, 5, 0)
+                            currentRoot.Anchored = true
+                            pcall(function()
+                                player:RequestStreamAroundAsync(targetPivot.Position)
+                            end)
+
                             local timeout = tick() + 5
                             while tick() < timeout do
                                 actualRoot = targetChar:FindFirstChild("HumanoidRootPart") or targetChar.PrimaryPart
                                 if actualRoot then break end
                                 task.wait(0.05)
                             end
+
                             if actualRoot then
-                                root.CFrame = actualRoot.CFrame * CFrame.new(0, 0, -4)
+                                currentRoot.CFrame = actualRoot.CFrame * CFrame.new(0, 0, -4)
                             else
                                 tpPlayerBtn.Text = "Ghosted!"
                                 task.wait(1.5)
                             end
-                            root.Anchored = false
+                            currentRoot.Anchored = false
                             tpPlayerBtn.Text = "Select Player"
                         end
                     end)
 
-                    task.wait(1)
-                    wipeAllPortals(false)
-                    if touchConn then touchConn:Disconnect() end
+                    task.wait(0.5)
+                    if tpPortal and tpPortal.Parent then tpPortal:Destroy() end
                 end)
             end)
         end
@@ -1151,6 +1203,9 @@ local function refreshPlayerList()
     return count
 end
 
+--=============================================================
+-- BUTTONS
+--=============================================================
 tpPlayerBtn.MouseButton1Click:Connect(function()
     setRandomQuote()
     local otherCount = refreshPlayerList()
@@ -1162,7 +1217,11 @@ tpPlayerBtn.MouseButton1Click:Connect(function()
         if panelOpen then
             panelOpen = false
             tpPlayerBtn:SetAttribute("ActiveState", false)
-            TweenService:Create(slidingPanel, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Size = UDim2.new(0, 0, 1, 0)}):Play()
+            TweenService:Create(
+                slidingPanel,
+                TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+                { Size = UDim2.new(0, 0, 1, 0) }
+            ):Play()
             tpPlayerBtn.BackgroundColor3 = Color3.fromRGB(20, 35, 25)
         end
         return
@@ -1172,11 +1231,11 @@ tpPlayerBtn.MouseButton1Click:Connect(function()
     local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
     if panelOpen then
         tpPlayerBtn:SetAttribute("ActiveState", true)
-        TweenService:Create(slidingPanel, tweenInfo, {Size = UDim2.new(0, 66, 1, 0)}):Play()
+        TweenService:Create(slidingPanel, tweenInfo, { Size = UDim2.new(0, 66, 1, 0) }):Play()
         tpPlayerBtn.BackgroundColor3 = Color3.fromRGB(40, 140, 50)
     else
         tpPlayerBtn:SetAttribute("ActiveState", false)
-        TweenService:Create(slidingPanel, tweenInfo, {Size = UDim2.new(0, 0, 1, 0)}):Play()
+        TweenService:Create(slidingPanel, tweenInfo, { Size = UDim2.new(0, 0, 1, 0) }):Play()
         tpPlayerBtn.BackgroundColor3 = Color3.fromRGB(20, 35, 25)
     end
 end)
@@ -1191,32 +1250,24 @@ Players.PlayerRemoving:Connect(function()
         if remaining == 0 then
             panelOpen = false
             tpPlayerBtn:SetAttribute("ActiveState", false)
-            TweenService:Create(slidingPanel, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Size = UDim2.new(0, 0, 1, 0)}):Play()
+            TweenService:Create(
+                slidingPanel,
+                TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+                { Size = UDim2.new(0, 0, 1, 0) }
+            ):Play()
             tpPlayerBtn.BackgroundColor3 = Color3.fromRGB(20, 35, 25)
         end
     end
 end)
 
--- ==========================================
--- VOID BUTTON
--- ==========================================
-voidBtn.MouseButton1Click:Connect(function()
-    abrirPortalVoid()
-end)
+voidBtn.MouseButton1Click:Connect(abrirPortalVoid)
+marcacaoBtn.MouseButton1Click:Connect(clicarMarcacao)
 
--- ==========================================
--- MARCAÇÃO BUTTON
--- ==========================================
-marcacaoBtn.MouseButton1Click:Connect(function()
-    clicarMarcacao()
-end)
-
--- ==========================================
+--=============================================================
 -- ANTI-TP BUTTON
--- ==========================================
+--=============================================================
 antiTPBtn.MouseButton1Click:Connect(function()
     setRandomQuote()
-
     local ativo = not antiTPBtn:GetAttribute("ActiveState")
     antiTPBtn:SetAttribute("ActiveState", ativo)
     getgenv().AntiTP_Ativo = ativo
@@ -1226,10 +1277,7 @@ antiTPBtn.MouseButton1Click:Connect(function()
         antiTPBtn.BackgroundColor3 = Color3.fromRGB(40, 140, 50)
         antiTPBtn.TextColor3 = Color3.fromRGB(200, 255, 210)
         if antiTPStroke then antiTPStroke.Color = Color3.fromRGB(80, 200, 100) end
-
-        antiTP_ultimaPos = nil
-        antiTP_ultimoCheck = 0
-        antiTP_tpCooldown = false
+        atpUltPos, atpUltimoCheck, atpCooldown = nil, 0, false
     else
         antiTPBtn.Text = "🔒 Anti-TP [OFF]"
         antiTPBtn.BackgroundColor3 = Color3.fromRGB(100, 25, 25)
@@ -1238,65 +1286,20 @@ antiTPBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- ==========================================
--- ANTI-TP LOOP
--- ==========================================
+--=============================================================
+-- ✅ BUG 13/14: ANTI-TP LOOP corrigido
+--=============================================================
 local function antiTP_bloquear(posicaoAnterior, character)
     local hrp = character:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
 
     local rotacaoAtual = hrp.CFrame - hrp.CFrame.Position
-    hrp.CFrame = CFrame.new(posicaoAnterior + Vector3.new(0, AntiTPConfig.OffsetY, 0)) * rotacaoAtual
-    hrp.AssemblyLinearVelocity  = Vector3.new(0, 0, 0)
+    hrp.CFrame = CFrame.new(posicaoAnterior + Vector3.new(0, ATP.OffsetY, 0)) * rotacaoAtual
+    hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
     hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
 
     alertaVermelho()
     efeitoTP()
-end
-
-local function antiTP_verificar(character, hrp, agora)
-    if not getgenv().AntiTP_Ativo then return end
-    if antiTP_tpCooldown then return end
-
-    if agora - antiTP_ultimoCheck < AntiTPConfig.Cooldown then return end
-
-    if not antiTP_ultimaPos then
-        antiTP_ultimaPos = hrp.Position
-        antiTP_ultimoCheck = agora
-        return
-    end
-
-    if agora - antiTP_ultimoRespawn < AntiTPConfig.IgnorarJanela then
-        antiTP_ultimaPos = hrp.Position
-        antiTP_ultimoCheck = agora
-        return
-    end
-
-    local distancia = (hrp.Position - antiTP_ultimaPos).Magnitude
-
-    if AntiTPConfig.IgnorarSeCaindo then
-        local velY = hrp.AssemblyLinearVelocity.Y
-        if velY < AntiTPConfig.VelocidadeCaindoMax then
-            antiTP_ultimaPos = hrp.Position
-            antiTP_ultimoCheck = agora
-            return
-        end
-    end
-
-    if distancia > AntiTPConfig.DistanciaMax then
-        antiTP_tpCooldown = true
-        antiTP_bloquear(antiTP_ultimaPos, character)
-
-        antiTP_ultimaPos = antiTP_ultimaPos + Vector3.new(0, AntiTPConfig.OffsetY, 0)
-        antiTP_ultimoCheck = agora
-
-        task.wait(0.3)
-        antiTP_tpCooldown = false
-        return
-    end
-
-    antiTP_ultimaPos = hrp.Position
-    antiTP_ultimoCheck = agora
 end
 
 RunService.Heartbeat:Connect(function()
@@ -1304,7 +1307,7 @@ RunService.Heartbeat:Connect(function()
 
     local character = player.Character
     if not character then
-        antiTP_ultimaPos = nil
+        atpUltPos = nil
         return
     end
 
@@ -1312,35 +1315,80 @@ RunService.Heartbeat:Connect(function()
     local humanoid = character:FindFirstChildOfClass("Humanoid")
 
     if not hrp or not humanoid then
-        antiTP_ultimaPos = nil
-        return
-    end
-    if humanoid.Health <= 0 then
-        antiTP_ultimaPos = nil
+        atpUltPos = nil
         return
     end
 
+    if humanoid.Health <= 0 then
+        atpUltPos = nil
+        return
+    end
+
+    if atpCooldown then return end
+
     local agora = os.clock()
-    antiTP_verificar(character, hrp, agora)
+    if agora - atpUltimoCheck < ATP.Cooldown then return end
+
+    if not atpUltPos then
+        atpUltPos = hrp.Position
+        atpUltimoCheck = agora
+        return
+    end
+
+    if agora - atpUltimoRespawn < ATP.IgnorarJanela then
+        atpUltPos = hrp.Position
+        atpUltimoCheck = agora
+        return
+    end
+
+    if ATP.IgnorarSeCaindo then
+        local velY = hrp.AssemblyLinearVelocity.Y
+        if velY < ATP.VelocidadeCaindoMax then
+            atpUltPos = hrp.Position
+            atpUltimoCheck = agora
+            return
+        end
+    end
+
+    local distancia = (hrp.Position - atpUltPos).Magnitude
+
+    if distancia > ATP.DistanciaMax then
+        atpCooldown = true
+        local posAnterior = atpUltPos
+        antiTP_bloquear(posAnterior, character)
+
+        -- ✅ BUG 13: usa posição REAL pós-TP (sem somar OffsetY)
+        if hrp and hrp.Parent then
+            atpUltPos = hrp.Position
+        else
+            atpUltPos = posAnterior + Vector3.new(0, ATP.OffsetY, 0)
+        end
+        atpUltimoCheck = agora
+
+        -- ✅ BUG 14: task.delay em vez de task.wait
+        task.delay(0.3, function() atpCooldown = false end)
+        return
+    end
+
+    atpUltPos = hrp.Position
+    atpUltimoCheck = agora
 end)
 
 player.CharacterAdded:Connect(function()
-    antiTP_ultimaPos = nil
-    antiTP_ultimoCheck = 0
-    antiTP_ultimoRespawn = os.clock()
+    atpUltPos = nil
+    atpUltimoCheck = 0
+    atpUltimoRespawn = os.clock()
 end)
 
--- ==========================================
--- CLEAR PORTALS
--- ==========================================
+--=============================================================
+-- CLEAR BUTTON
+--=============================================================
 clearBtn.MouseButton1Click:Connect(function()
     setRandomQuote()
-
-    local tinhaPortais = #activePortals > 0
-
+    local tinha = #activePortals > 0
     wipeAllPortals(true)
 
-    if tinhaPortais then
+    if tinha then
         clearBtn.Text = "Cleared!"
         clearBtn.BackgroundColor3 = Color3.fromRGB(40, 140, 50)
         task.wait(0.6)
@@ -1352,20 +1400,38 @@ clearBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- ==========================================
--- CLEANUP
--- ==========================================
+--=============================================================
+-- ✅ BUG 19/20/21: CLEANUP completo
+--=============================================================
 local function fullCleanup()
-    wipeAllPortals(false)
+    -- ✅ desliga TODAS as flags
+    getgenv().AntiTP_Ativo = false
+    getgenv().Marcacao_Ativo = false
+
+    -- ✅ limpa portais de todas as categorias
+    wipePortalsPorTag(TAG_GEN, false)
+    wipePortalsPorTag(TAG_M1, false)
+    wipePortalsPorTag(TAG_M2, false)
+    wipePortalsPorTag(TAG_VOID, false)
+    wipePortalsPorTag(TAG_RET, false)
+    table.clear(activePortals)
+
     deletarVoidPlace()
     deletarLocalTP()
-
     limparMarcacao()
 
-    for _, conn in ipairs(connections) do conn:Disconnect() end
-    table.clear(connections)
-    if screenGui then screenGui:Destroy() end
-    if efeitosGui then efeitosGui:Destroy() end
+    -- ✅ remove blur residual
+    if blurEffect and blurEffect.Parent then
+        blurEffect:Destroy()
+        blurEffect = nil
+    end
+    blurTween = nil
+
+    -- ✅ remove GUIs
+    if screenGui and screenGui.Parent then screenGui:Destroy() end
+    if fxGui and fxGui.Parent then fxGui:Destroy() end
+
+    getgenv().RickPortalCleanup = nil
 end
 
 getgenv().RickPortalCleanup = fullCleanup
@@ -1374,11 +1440,11 @@ closeBtn.MouseButton1Click:Connect(function()
     local slideOutTween = TweenService:Create(
         mainFrame,
         TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.In),
-        {Position = UDim2.new(0, -130, 0.35, -87)}
+        { Position = UDim2.new(0, -130, 0.35, -87) }
     )
     slideOutTween:Play()
     slideOutTween.Completed:Wait()
     fullCleanup()
 end)
 
-print("✅ Rick Portal GUI + Marcação + Anti-TP carregado!")
+print("✅ Rick Portal GUI + Marcação + Anti-TP carregado (v2 corrigida)")
