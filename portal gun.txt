@@ -1,5 +1,5 @@
 --=============================================================
--- RICK PRIME — Portal GUI + Marcação + Anti-TP (CORRIGIDO)
+-- RICK PRIME — Portal GUI + Marcação + Anti-TP (v3 CORRIGIDO)
 --=============================================================
 local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
@@ -10,12 +10,12 @@ local Lighting = game:GetService("Lighting")
 local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
 
--- ✅ BUG 19: cleanup de execução anterior
+-- ✅ Cleanup de execução anterior
 if getgenv().RickPortalCleanup then pcall(getgenv().RickPortalCleanup) end
 getgenv().AntiTP_Ativo = false
 getgenv().Marcacao_Ativo = false
 
--- ✅ BUG 21: limpa blur órfão
+-- ✅ Limpa blur órfão
 for _, fx in ipairs(Lighting:GetChildren()) do
     if fx:IsA("BlurEffect") and fx.Name == "RP_Blur" then
         fx:Destroy()
@@ -30,16 +30,16 @@ local PORTAL_TEXTURE = "rbxthumb://type=Asset&id=" .. PORTAL_ASSET_ID .. "&w=420
 local PORTAL_AUDIO_ID = "rbxassetid://756847338"
 local TP_AUDIO_ID = "rbxassetid://74562584385247"
 
--- ✅ BUG 4: tags separadas por categoria
+-- ✅ Tags separadas por categoria
 local TAG_GEN  = "RP_Gen_"  .. player.UserId
 local TAG_M1   = "RP_M1_"   .. player.UserId
 local TAG_M2   = "RP_M2_"   .. player.UserId
 local TAG_VOID = "RP_Void_" .. player.UserId
 local TAG_RET  = "RP_Ret_"  .. player.UserId
 
-local activePortals = {}       -- portais genéricos
+local activePortals = {}
 local marcacaoP1, marcacaoP2 = nil, nil
-local marcacaoConns = {}       -- conexões da marcação
+local marcacaoConns = {}
 
 --=============================================================
 -- ANTI-TP
@@ -77,9 +77,9 @@ local function mkFrame(name, color, z)
     return f
 end
 
-local fadeFrame       = mkFrame("Fade",   Color3.fromRGB(50, 255, 130), 1000)
-local flashFrame      = mkFrame("Flash",  Color3.fromRGB(255, 255, 255), 1001)
-local alertaFrame     = mkFrame("Alerta", Color3.fromRGB(255, 0, 0), 1002)
+local fadeFrame   = mkFrame("Fade",   Color3.fromRGB(50, 255, 130), 1000)
+local flashFrame  = mkFrame("Flash",  Color3.fromRGB(255, 255, 255), 1001)
+local alertaFrame = mkFrame("Alerta", Color3.fromRGB(255, 0, 0), 1002)
 
 local ondasContainer = Instance.new("Frame")
 ondasContainer.Name = "Ondas"
@@ -96,7 +96,7 @@ particulasContainer.ZIndex = 1005
 particulasContainer.Parent = fxGui
 
 --=============================================================
--- BLUR (com cleanup correto)
+-- BLUR
 --=============================================================
 local blurEffect = nil
 local blurTween = nil
@@ -125,7 +125,7 @@ local function removerBlur(duracao)
 end
 
 --=============================================================
--- FLASH (com cancel de tween anterior)
+-- FLASH
 --=============================================================
 local flashTween = nil
 local function flashTela(cor, duracao)
@@ -141,15 +141,13 @@ local function flashTela(cor, duracao)
 end
 
 local function alertaVermelho()
-    task.spawn(function()
-        alertaFrame.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-        alertaFrame.BackgroundTransparency = 0.3
-        TweenService:Create(
-            alertaFrame,
-            TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-            { BackgroundTransparency = 1 }
-        ):Play()
-    end)
+    alertaFrame.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    alertaFrame.BackgroundTransparency = 0.3
+    TweenService:Create(
+        alertaFrame,
+        TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        { BackgroundTransparency = 1 }
+    ):Play()
 end
 
 local function efeitoOndas(quantidade, duracao, cor)
@@ -241,11 +239,9 @@ local function cameraShake(intensidade, duracao)
 end
 
 --=============================================================
--- ✅ BUG 1/2: playTPSound movido pra ANTES e virou local
+-- ✅ BUG 1 CORRIGIDO: playTPSound AGORA É DEFINIDA ANTES
 --=============================================================
 local function playTPSound()
-    local char = player.Character
-    local root = char and char:FindFirstChild("HumanoidRootPart")
     local s = Instance.new("Sound")
     s.SoundId = TP_AUDIO_ID
     s.Volume = 3
@@ -257,7 +253,7 @@ local function playTPSound()
 end
 
 --=============================================================
--- EFEITO TP (com guard contra múltiplas execuções)
+-- EFEITO TP
 --=============================================================
 local COR_TP = Color3.fromRGB(50, 255, 130)
 local efeitoTPAtivo = false
@@ -288,9 +284,6 @@ local function efeitoTP()
     end)
 end
 
---=============================================================
--- TP COM EFEITO
---=============================================================
 local function fazerTPComEfeito(root, destinoCFrame)
     if not root or not root.Parent then return end
     playTPSound()
@@ -306,7 +299,70 @@ local function fazerTPComEfeito(root, destinoCFrame)
 end
 
 --=============================================================
--- ✅ BUG 22: WIPE sem duplicatas
+-- 🌀 FECHAMENTO ANIMADO (giro + encolhimento)
+--=============================================================
+local function fecharPortal(portalPart)
+    if not portalPart or not portalPart.Parent then return end
+    if portalPart:GetAttribute("Fechando") then return end
+    portalPart:SetAttribute("Fechando", true)
+
+    -- Desativa interações
+    portalPart.CanTouch = false
+    portalPart.CanCollide = false
+
+    -- Para partículas
+    for _, emitter in ipairs(portalPart:GetChildren()) do
+        if emitter:IsA("ParticleEmitter") then
+            emitter.Enabled = false
+        end
+    end
+
+    -- Fade out do som
+    for _, sfx in ipairs(portalPart:GetChildren()) do
+        if sfx:IsA("Sound") then
+            pcall(function()
+                TweenService:Create(sfx, TweenInfo.new(0.3), {Volume = 0}):Play()
+            end)
+        end
+    end
+
+    -- 🌀 Animação: girar + encolher
+    local DUR = 0.45
+    local rotacaoTotal = math.rad(720)  -- 2 voltas completas
+    local _, yRotInicial = portalPart.CFrame:ToOrientation()
+
+    -- Encolhe (tween)
+    TweenService:Create(
+        portalPart,
+        TweenInfo.new(DUR, Enum.EasingStyle.Quart, Enum.EasingDirection.In),
+        { Size = Vector3.new(0, 0, 0.1) }
+    ):Play()
+
+    -- Gira (loop manual pra acumular rotação)
+    local inicio = tick()
+    local conn
+    conn = RunService.Heartbeat:Connect(function()
+        if not portalPart or not portalPart.Parent then
+            if conn then conn:Disconnect() end
+            return
+        end
+
+        local p = (tick() - inicio) / DUR
+        if p >= 1 then
+            conn:Disconnect()
+            if portalPart and portalPart.Parent then
+                portalPart:Destroy()
+            end
+            return
+        end
+
+        local novoY = yRotInicial + rotacaoTotal * p
+        portalPart.CFrame = CFrame.new(portalPart.Position) * CFrame.Angles(0, novoY, 0)
+    end)
+end
+
+--=============================================================
+-- WIPE
 --=============================================================
 local function wipePortalsPorTag(tag, comEfeito)
     local portais = {}
@@ -319,40 +375,45 @@ local function wipePortalsPorTag(tag, comEfeito)
         end
     end
 
-    for _, p in ipairs(portais) do
-        if p and p.Parent then
-            p:Destroy()
+    if comEfeito then
+        for _, p in ipairs(portais) do
+            if p and p.Parent then
+                fecharPortal(p)
+            end
         end
-    end
-
-    if comEfeito and #portais > 0 then
-        efeitoTP()
+        if #portais > 0 then
+            efeitoTP()
+        end
+    else
+        for _, p in ipairs(portais) do
+            if p and p.Parent then
+                p:Destroy()
+            end
+        end
     end
 
     return #portais
 end
 
 local function wipeAllPortals(comEfeito)
-    local total = 0
-    total = total + wipePortalsPorTag(TAG_GEN, comEfeito)
+    local total = wipePortalsPorTag(TAG_GEN, comEfeito)
     table.clear(activePortals)
     return total
 end
 
--- Limpeza inicial de TODAS as tags antigas
+-- Limpeza inicial
 for _, tag in ipairs({TAG_GEN, TAG_M1, TAG_M2, TAG_VOID, TAG_RET}) do
     for _, p in ipairs(CollectionService:GetTagged(tag)) do
         if p then p:Destroy() end
     end
 end
 
--- ✅ BUG 20: cleanup de GUI antiga
 if CoreGui:FindFirstChild("RickPortalGUI") then
     CoreGui.RickPortalGUI:Destroy()
 end
 
 --=============================================================
--- ✅ BUG 6: VOID place + monitor (com task.defer)
+-- VOID
 --=============================================================
 local VOID_Y = -500
 local VOID_CENTRO = Vector3.new(0, VOID_Y, 0)
@@ -361,7 +422,6 @@ local voidPlaceFolder = nil
 local voidMonitorConn = nil
 local localTP = nil
 
--- ✅ BUG 5: criarLocalTP destrói o anterior
 local function criarLocalTP(posicao)
     if localTP and localTP.Parent then localTP:Destroy() end
     local p = Instance.new("Part")
@@ -496,7 +556,6 @@ local uiCorner = Instance.new("UICorner")
 uiCorner.CornerRadius = UDim.new(0, 7)
 uiCorner.Parent = mainFrame
 
--- ✅ BUG 15: apenas UMA UIStroke no mainFrame
 local mainStroke = Instance.new("UIStroke")
 mainStroke.Color = Color3.fromRGB(40, 220, 90)
 mainStroke.Thickness = 1.5
@@ -555,7 +614,6 @@ local function createSaggingCable(startX, startY, endX, endY, sagDepth, wireColo
         local dx = x2 - x1
         local dy = y2 - y1
         local dist = math.sqrt(dx * dx + dy * dy)
-        -- ✅ BUG 16: math.atan(dy, dx) em vez de math.atan2
         local angle = math.deg(math.atan(dy, dx))
 
         local seg = Instance.new("Frame")
@@ -683,7 +741,6 @@ closeBtn.TextColor3 = Color3.fromRGB(255, 200, 200)
 local closeStroke = closeBtn:FindFirstChildOfClass("UIStroke")
 if closeStroke then closeStroke.Color = Color3.fromRGB(200, 50, 50) end
 
--- Void styling
 voidBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 voidBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
 local voidStroke = voidBtn:FindFirstChildOfClass("UIStroke")
@@ -697,7 +754,6 @@ voidBtn.MouseLeave:Connect(function()
     end
 end)
 
--- Marcação styling
 marcacaoBtn.BackgroundColor3 = Color3.fromRGB(255, 200, 50)
 marcacaoBtn.TextColor3 = Color3.fromRGB(50, 30, 0)
 local marcacaoStroke = marcacaoBtn:FindFirstChildOfClass("UIStroke")
@@ -716,13 +772,11 @@ marcacaoBtn.MouseLeave:Connect(function()
     end
 end)
 
--- Anti-TP styling
 antiTPBtn.BackgroundColor3 = Color3.fromRGB(100, 25, 25)
 antiTPBtn.TextColor3 = Color3.fromRGB(255, 200, 200)
 local antiTPStroke = antiTPBtn:FindFirstChildOfClass("UIStroke")
 if antiTPStroke then antiTPStroke.Color = Color3.fromRGB(200, 50, 50) end
 
--- Footer
 local footerLabel = Instance.new("TextLabel")
 footerLabel.Size = UDim2.new(1, 0, 0, 8)
 footerLabel.Position = UDim2.new(0, 0, 1, -9)
@@ -790,7 +844,7 @@ uiListLayout.Parent = scrollingList
 local panelOpen = false
 
 --=============================================================
--- PORTAL INSTANCE (com tag parametrizável)
+-- PORTAL INSTANCE
 --=============================================================
 local function createPortalInstance(cframe, tag)
     tag = tag or TAG_GEN
@@ -878,11 +932,11 @@ local function createPortalInstance(cframe, tag)
 end
 
 --=============================================================
--- ✅ BUG 3/8: VOID com reset de texto e sem task.wait longo
+-- VOID
 --=============================================================
 local function abrirPortalVoid()
     setRandomQuote()
-    wipeAllPortals(false)
+    wipeAllPortals(true)
     panelOpen = false
     tpPlayerBtn:SetAttribute("ActiveState", false)
     TweenService:Create(
@@ -901,12 +955,11 @@ local function abrirPortalVoid()
     local voidPortal = createPortalInstance(root.CFrame * CFrame.new(0, 0, -5), TAG_VOID)
     voidBtn.Text = "Enter Void Portal!"
 
-    -- ✅ BUG 8: reset do texto após 15s se não entrar
     local resetAtivo = true
     task.delay(15, function()
         if resetAtivo and voidPortal and voidPortal.Parent then
             voidBtn.Text = "🌑 Void"
-            voidPortal:Destroy()
+            fecharPortal(voidPortal)
         end
     end)
 
@@ -949,7 +1002,6 @@ local function abrirPortalVoid()
                 task.spawn(function()
                     task.wait(0.2)
 
-                    -- ✅ BUG 7: re-fetch do root dentro do callback
                     local currentChar = player.Character
                     local currentRoot = currentChar and currentChar:FindFirstChild("HumanoidRootPart")
                     if not currentRoot then return end
@@ -969,8 +1021,8 @@ local function abrirPortalVoid()
 
                     deletarVoidPlace()
                     deletarLocalTP()
-                    wipePortalsPorTag(TAG_VOID, false)
-                    wipePortalsPorTag(TAG_RET, false)
+                    wipePortalsPorTag(TAG_VOID, true)
+                    wipePortalsPorTag(TAG_RET, true)
                 end)
             end)
         end)
@@ -978,7 +1030,7 @@ local function abrirPortalVoid()
 end
 
 --=============================================================
--- ✅ BUG 11: MARCAÇÃO — estado 2 reseta
+-- MARCAÇÃO
 --=============================================================
 local function limparMarcacao()
     for _, conn in ipairs(marcacaoConns) do
@@ -986,8 +1038,8 @@ local function limparMarcacao()
     end
     table.clear(marcacaoConns)
 
-    if marcacaoP1 and marcacaoP1.Parent then marcacaoP1:Destroy() end
-    if marcacaoP2 and marcacaoP2.Parent then marcacaoP2:Destroy() end
+    if marcacaoP1 and marcacaoP1.Parent then fecharPortal(marcacaoP1) end
+    if marcacaoP2 and marcacaoP2.Parent then fecharPortal(marcacaoP2) end
     marcacaoP1, marcacaoP2 = nil, nil
 
     marcacaoBtn.Text = "🎯 Marcação [0/2]"
@@ -1032,8 +1084,8 @@ local function clicarMarcacao()
 
     if state == 0 then
         setRandomQuote()
-        if marcacaoP1 and marcacaoP1.Parent then marcacaoP1:Destroy() end
-        if marcacaoP2 and marcacaoP2.Parent then marcacaoP2:Destroy() end
+        if marcacaoP1 and marcacaoP1.Parent then fecharPortal(marcacaoP1) end
+        if marcacaoP2 and marcacaoP2.Parent then fecharPortal(marcacaoP2) end
         marcacaoP1, marcacaoP2 = nil, nil
 
         marcacaoP1 = createPortalInstance(root.CFrame * CFrame.new(0, 0, -5), TAG_M1)
@@ -1060,7 +1112,6 @@ local function clicarMarcacao()
         conectarPortais(marcacaoP1, marcacaoP2)
 
     elseif state == 2 then
-        -- ✅ BUG 11: reset
         setRandomQuote()
         limparMarcacao()
     end
@@ -1109,7 +1160,7 @@ local function refreshPlayerList()
 
             pBtn.MouseButton1Click:Connect(function()
                 setRandomQuote()
-                wipeAllPortals(false)
+                wipeAllPortals(true)
                 panelOpen = false
                 tpPlayerBtn:SetAttribute("ActiveState", false)
                 TweenService:Create(
@@ -1126,12 +1177,11 @@ local function refreshPlayerList()
                 local tpPortal = createPortalInstance(root.CFrame * CFrame.new(0, 0, -5), TAG_GEN)
                 tpPlayerBtn.Text = "Enter Portal!"
 
-                -- ✅ reset em 15s
                 local resetAtivo = true
                 task.delay(15, function()
                     if resetAtivo and tpPortal and tpPortal.Parent then
                         tpPlayerBtn.Text = "Select Player"
-                        tpPortal:Destroy()
+                        fecharPortal(tpPortal)
                     end
                 end)
 
@@ -1159,7 +1209,6 @@ local function refreshPlayerList()
                         local targetPivot = targetChar:GetPivot()
                         local actualRoot = targetChar:FindFirstChild("HumanoidRootPart") or targetChar.PrimaryPart
 
-                        -- ✅ re-fetch do root
                         local currentChar = player.Character
                         local currentRoot = currentChar and currentChar:FindFirstChild("HumanoidRootPart")
                         if not currentRoot then return end
@@ -1192,8 +1241,11 @@ local function refreshPlayerList()
                         end
                     end)
 
-                    task.wait(0.5)
-                    if tpPortal and tpPortal.Parent then tpPortal:Destroy() end
+                    task.delay(0.5, function()
+                        if tpPortal and tpPortal.Parent then
+                            fecharPortal(tpPortal)
+                        end
+                    end)
                 end)
             end)
         end
@@ -1287,7 +1339,7 @@ antiTPBtn.MouseButton1Click:Connect(function()
 end)
 
 --=============================================================
--- ✅ BUG 13/14: ANTI-TP LOOP corrigido
+-- ANTI-TP LOOP
 --=============================================================
 local function antiTP_bloquear(posicaoAnterior, character)
     local hrp = character:FindFirstChild("HumanoidRootPart")
@@ -1357,7 +1409,7 @@ RunService.Heartbeat:Connect(function()
         local posAnterior = atpUltPos
         antiTP_bloquear(posAnterior, character)
 
-        -- ✅ BUG 13: usa posição REAL pós-TP (sem somar OffsetY)
+        -- ✅ Usa a posição real pós-TP
         if hrp and hrp.Parent then
             atpUltPos = hrp.Position
         else
@@ -1365,7 +1417,6 @@ RunService.Heartbeat:Connect(function()
         end
         atpUltimoCheck = agora
 
-        -- ✅ BUG 14: task.delay em vez de task.wait
         task.delay(0.3, function() atpCooldown = false end)
         return
     end
@@ -1401,33 +1452,37 @@ clearBtn.MouseButton1Click:Connect(function()
 end)
 
 --=============================================================
--- ✅ BUG 19/20/21: CLEANUP completo
+-- CLEANUP
 --=============================================================
 local function fullCleanup()
-    -- ✅ desliga TODAS as flags
     getgenv().AntiTP_Ativo = false
     getgenv().Marcacao_Ativo = false
 
-    -- ✅ limpa portais de todas as categorias
-    wipePortalsPorTag(TAG_GEN, false)
-    wipePortalsPorTag(TAG_M1, false)
-    wipePortalsPorTag(TAG_M2, false)
-    wipePortalsPorTag(TAG_VOID, false)
-    wipePortalsPorTag(TAG_RET, false)
+    -- ✅ Fecha com animação tudo que sobrou
+    wipePortalsPorTag(TAG_GEN, true)
+    wipePortalsPorTag(TAG_M1, true)
+    wipePortalsPorTag(TAG_M2, true)
+    wipePortalsPorTag(TAG_VOID, true)
+    wipePortalsPorTag(TAG_RET, true)
     table.clear(activePortals)
 
     deletarVoidPlace()
     deletarLocalTP()
     limparMarcacao()
 
-    -- ✅ remove blur residual
     if blurEffect and blurEffect.Parent then
         blurEffect:Destroy()
         blurEffect = nil
     end
     blurTween = nil
 
-    -- ✅ remove GUIs
+    -- ✅ Remove sons órfãos do SoundService
+    for _, s in ipairs(SoundService:GetChildren()) do
+        if s:IsA("Sound") then
+            pcall(function() s:Destroy() end)
+        end
+    end
+
     if screenGui and screenGui.Parent then screenGui:Destroy() end
     if fxGui and fxGui.Parent then fxGui:Destroy() end
 
@@ -1447,4 +1502,4 @@ closeBtn.MouseButton1Click:Connect(function()
     fullCleanup()
 end)
 
-print("✅ Rick Portal GUI + Marcação + Anti-TP carregado (v2 corrigida)")
+print("✅ Rick Portal GUI v3 + Fechamento Animado (giro + encolhimento)")
