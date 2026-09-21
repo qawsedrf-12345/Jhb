@@ -1,5 +1,5 @@
 --=============================================================
--- RICK PRIME — Portal GUI + Marcação + Anti-TP (v7)
+-- RICK PRIME — Portal GUI + Marcação + Anti-TP (v9)
 --=============================================================
 local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
@@ -427,14 +427,16 @@ if CoreGui:FindFirstChild("RickPortalGUI") then
 end
 
 --=============================================================
--- VOID
+-- VOID (TAMANHO 1000 + GRAMA VERDE + TOLERÂNCIA 3s)
 --=============================================================
 local VOID_Y = -500
 local VOID_CENTRO = Vector3.new(0, VOID_Y, 0)
-local VOID_TAMANHO = 100
+local VOID_TAMANHO = 1000
 local voidPlaceFolder = nil
 local voidMonitorConn = nil
 local localTP = nil
+local voidForaDesde = nil
+local VOID_TOLERANCIA = 3
 
 local function criarLocalTP(posicao)
     if localTP and localTP.Parent then return end
@@ -464,19 +466,21 @@ local function criarVoidPlace()
     folder.Parent = workspace
     voidPlaceFolder = folder
 
+    -- 🌱 Chão com textura de grama e cor verde escura
     local chao = Instance.new("Part")
     chao.Name = "VoidChao"
-    chao.Size = Vector3.new(200, 4, 200)
+    chao.Size = Vector3.new(VOID_TAMANHO * 2, 4, VOID_TAMANHO * 2)
     chao.Position = VOID_CENTRO
     chao.Anchored = true
     chao.CanCollide = true
-    chao.Material = Enum.Material.Neon
-    chao.Color = Color3.fromRGB(30, 30, 40)
+    chao.Material = Enum.Material.Grass
+    chao.Color = Color3.fromRGB(45, 90, 40)
     chao.Parent = folder
 
+    -- 🟢 Borda brilhante verde
     local borda = Instance.new("Part")
     borda.Name = "VoidBorda"
-    borda.Size = Vector3.new(204, 1, 204)
+    borda.Size = Vector3.new(VOID_TAMANHO * 2 + 4, 1, VOID_TAMANHO * 2 + 4)
     borda.Position = VOID_CENTRO + Vector3.new(0, -2.5, 0)
     borda.Anchored = true
     borda.CanCollide = false
@@ -485,10 +489,11 @@ local function criarVoidPlace()
     borda.Transparency = 0.3
     borda.Parent = folder
 
+    -- 💡 Luz central
     local luzCentral = Instance.new("Part")
     luzCentral.Name = "VoidLuz"
     luzCentral.Size = Vector3.new(1, 1, 1)
-    luzCentral.Position = VOID_CENTRO + Vector3.new(0, 40, 0)
+    luzCentral.Position = VOID_CENTRO + Vector3.new(0, 200, 0)
     luzCentral.Anchored = true
     luzCentral.CanCollide = false
     luzCentral.Transparency = 1
@@ -496,12 +501,13 @@ local function criarVoidPlace()
 
     local pl = Instance.new("PointLight")
     pl.Color = Color3.fromRGB(50, 255, 130)
-    pl.Range = 200
+    pl.Range = 500
     pl.Brightness = 2
     pl.Parent = luzCentral
 end
 
 local function deletarVoidPlace()
+    voidForaDesde = nil
     if voidPlaceFolder then
         voidPlaceFolder:Destroy()
         voidPlaceFolder = nil
@@ -521,8 +527,7 @@ local function monitorarSaidaDoVoid()
 
         local char = player.Character
         if not char then
-            task.defer(deletarVoidPlace)
-            task.defer(deletarLocalTP)
+            voidForaDesde = nil
             return
         end
 
@@ -530,7 +535,9 @@ local function monitorarSaidaDoVoid()
         local hrp = char:FindFirstChild("HumanoidRootPart")
         if not hrp then return end
 
+        -- ⚠️ Se morrer, deleta na hora (sem esperar 3s)
         if humanoid and humanoid.Health <= 0 then
+            voidForaDesde = nil
             task.defer(deletarVoidPlace)
             task.defer(deletarLocalTP)
             return
@@ -540,11 +547,27 @@ local function monitorarSaidaDoVoid()
         local foraX = math.abs(pos.X) > VOID_TAMANHO + 20
         local foraZ = math.abs(pos.Z) > VOID_TAMANHO + 20
         local caiuMuito = pos.Y < VOID_Y - 100
-        local subiuMuito = pos.Y > VOID_Y + 200
+        local subiuMuito = pos.Y > VOID_Y + 500
 
-        if foraX or foraZ or caiuMuito or subiuMuito then
-            task.defer(deletarVoidPlace)
-            task.defer(deletarLocalTP)
+        local estaFora = foraX or foraZ or caiuMuito or subiuMuito
+
+        if estaFora then
+            -- 🕐 Começou a contar agora?
+            if not voidForaDesde then
+                voidForaDesde = tick()
+            end
+
+            -- ⏱️ Já passou da tolerância?
+            if tick() - voidForaDesde >= VOID_TOLERANCIA then
+                voidForaDesde = nil
+                task.defer(deletarVoidPlace)
+                task.defer(deletarLocalTP)
+            end
+        else
+            -- ✅ Voltou pra dentro — reseta o timer
+            if voidForaDesde then
+                voidForaDesde = nil
+            end
         end
     end)
 end
@@ -1066,13 +1089,6 @@ local function abrirPortalVoid()
                 root.CFrame = destino
             end
 
-            -- 🌀 Portal de saída (aparece na frente e some voando pra trás)
-            task.wait(0.05)
-            local charVoid = player.Character
-            if charVoid then
-                spawnPortalSaida(charVoid)
-            end
-
             task.wait(0.3)
 
             local portalVolta = createPortalInstance(
@@ -1105,13 +1121,6 @@ local function abrirPortalVoid()
                         else
                             currentRoot.CFrame = CFrame.new(0, 50, 0)
                         end
-                    end
-
-                    -- 🌀 Portal de saída também ao voltar do Void
-                    task.wait(0.05)
-                    local charVolta = player.Character
-                    if charVolta then
-                        spawnPortalSaida(charVolta)
                     end
 
                     task.wait(0.3)
@@ -1621,4 +1630,4 @@ closeBtn.MouseButton1Click:Connect(function()
     fullCleanup()
 end)
 
-print("✅ Prime Rick Portal GUI v7 + Void com portal de saída")
+print("✅ Prime Rick Portal GUI v9 + Void 1000 + Grama + Tolerância 3s")
