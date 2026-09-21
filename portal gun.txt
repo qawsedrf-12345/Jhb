@@ -1,5 +1,5 @@
 --=============================================================
--- RICK PRIME — Portal GUI + Marcação + Anti-TP (v9)
+-- RICK PRIME — Portal GUI + Marcação + Anti-TP (v11)
 --=============================================================
 local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
@@ -853,13 +853,45 @@ pInnerCorner.CornerRadius = UDim.new(0, 4)
 pInnerCorner.Parent = panelInner
 
 local panelTitle = Instance.new("TextLabel")
-panelTitle.Size = UDim2.new(1, 0, 0, 13)
+panelTitle.Size = UDim2.new(1, -25, 0, 13)
 panelTitle.BackgroundTransparency = 1
 panelTitle.Text = "🌀 TARGETS 🌀"
 panelTitle.TextColor3 = Color3.fromRGB(50, 255, 100)
 panelTitle.Font = Enum.Font.GothamBold
 panelTitle.TextSize = 7
+panelTitle.TextXAlignment = Enum.TextXAlignment.Left
+panelTitle.Position = UDim2.new(0, 3, 0, 0)
 panelTitle.Parent = panelInner
+
+-- 🔄 Botão de Refresh
+local refreshBtn = Instance.new("TextButton")
+refreshBtn.Name = "RefreshBtn"
+refreshBtn.Size = UDim2.new(0, 20, 0, 13)
+refreshBtn.Position = UDim2.new(1, -22, 0, 0)
+refreshBtn.BackgroundColor3 = Color3.fromRGB(20, 50, 30)
+refreshBtn.Text = "🔄"
+refreshBtn.TextColor3 = Color3.fromRGB(180, 255, 180)
+refreshBtn.Font = Enum.Font.GothamBold
+refreshBtn.TextSize = 9
+refreshBtn.AutoButtonColor = false
+refreshBtn.Parent = panelInner
+
+local refreshCorner = Instance.new("UICorner")
+refreshCorner.CornerRadius = UDim.new(0, 3)
+refreshCorner.Parent = refreshBtn
+
+local refreshStroke = Instance.new("UIStroke")
+refreshStroke.Color = Color3.fromRGB(40, 160, 70)
+refreshStroke.Thickness = 1
+refreshStroke.Parent = refreshBtn
+
+refreshBtn.MouseEnter:Connect(function()
+    refreshBtn.BackgroundColor3 = Color3.fromRGB(30, 80, 40)
+end)
+
+refreshBtn.MouseLeave:Connect(function()
+    refreshBtn.BackgroundColor3 = Color3.fromRGB(20, 50, 30)
+end)
 
 local scrollingList = Instance.new("ScrollingFrame")
 scrollingList.Size = UDim2.new(1, -6, 1, -19)
@@ -876,6 +908,7 @@ uiListLayout.Padding = UDim.new(0, 2)
 uiListLayout.Parent = scrollingList
 
 local panelOpen = false
+local playerBtns = {}  -- 🔄 UserId → botão
 
 --=============================================================
 -- PORTAL INSTANCE
@@ -897,7 +930,6 @@ local function createPortalInstance(cframe, tag, opcoes)
     CollectionService:AddTag(portalPart, tag)
     if tag == TAG_GEN then table.insert(activePortals, portalPart) end
 
-    -- 🎵 Som de loop (opcional)
     if opcoes.comSom ~= false then
         local portalLoop = Instance.new("Sound")
         portalLoop.Name = "PortalLoopSound"
@@ -916,7 +948,6 @@ local function createPortalInstance(cframe, tag, opcoes)
     portalLight.Brightness = 3
     portalLight.Parent = portalPart
 
-    -- ✨ Partículas (opcional)
     if opcoes.comParticulas ~= false then
         local sparks = Instance.new("ParticleEmitter")
         sparks.Color = ColorSequence.new(Color3.fromRGB(50, 255, 80))
@@ -957,14 +988,12 @@ local function createPortalInstance(cframe, tag, opcoes)
     local fFront = createSurfaceFace(Enum.NormalId.Front)
     local bFront = createSurfaceFace(Enum.NormalId.Back)
 
-    -- Cresce com "pop"
     TweenService:Create(
         portalPart,
         TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
         { Size = Vector3.new(7, 7, 0.1) }
     ):Play()
 
-    -- 🔄 Rotação das imagens (opcional)
     if opcoes.comGiro ~= false then
         task.spawn(function()
             while portalPart and portalPart.Parent do
@@ -980,31 +1009,26 @@ local function createPortalInstance(cframe, tag, opcoes)
 end
 
 --=============================================================
--- 🌀 PORTAL DE SAÍDA (fundo transparente, textura com fade)
+-- 🌀 PORTAL DE SAÍDA
 --=============================================================
 local function spawnPortalSaida(char)
     if not char or not char.Parent then return end
     local root = char:FindFirstChild("HumanoidRootPart")
     if not root then return end
 
-    -- 🎯 Aparece BEM na frente do personagem (2 studs)
     local cframeInicial = root.CFrame * CFrame.new(0, 0, -2)
 
-    -- 🚫 Sem som, sem partículas, sem giro
     local portal, fFront, bFront = createPortalInstance(cframeInicial, TAG_SAIDA, {
         comSom = false,
         comParticulas = false,
         comGiro = false,
     })
 
-    -- 🔦 Fundo do portal totalmente transparente desde o início
     portal.Transparency = 1
 
-    -- 🎨 Textura começa 100% visível (transparência 0)
     if fFront then fFront.ImageTransparency = 0 end
     if bFront then bFront.ImageTransparency = 0 end
 
-    -- 🚀 Move pra trás + fade da textura (0 → 1)
     local cframeFinal = cframeInicial * CFrame.new(0, 0, 4)
 
     task.spawn(function()
@@ -1015,11 +1039,9 @@ local function spawnPortalSaida(char)
             local p = (tick() - inicio) / DUR
             if p >= 1 then break end
 
-            -- Move (mantém rotação fixa — sem giro)
             local posAtual = cframeInicial:Lerp(cframeFinal, p)
             portal.CFrame = CFrame.new(posAtual.Position) * (cframeInicial - cframeInicial.Position)
 
-            -- 🎨 Fade da textura (0 → 1)
             local transparencia = math.clamp(p, 0, 1)
             if fFront then fFront.ImageTransparency = transparencia end
             if bFront then bFront.ImageTransparency = transparencia end
@@ -1027,7 +1049,6 @@ local function spawnPortalSaida(char)
             task.wait()
         end
 
-        -- Remove no final
         if portal and portal.Parent then
             portal:Destroy()
         end
@@ -1083,7 +1104,6 @@ local function abrirPortalVoid()
             criarVoidPlace()
             monitorarSaidaDoVoid()
 
-            -- 🌀 Teleporta pro Void
             local destino = CFrame.new(VOID_CENTRO.X, VOID_CENTRO.Y + 5, VOID_CENTRO.Z)
             if root and root.Parent then
                 root.CFrame = destino
@@ -1226,150 +1246,195 @@ local function clicarMarcacao()
 end
 
 --=============================================================
--- PLAYER LIST
+-- PLAYER LIST (INCREMENTAL)
 --=============================================================
+-- Função que cria o botão de um jogador
+local function criarBotaoPlayer(p, layoutOrder)
+    local pBtn = Instance.new("TextButton")
+    pBtn.Size = UDim2.new(1, 0, 0, 17)
+    pBtn.BackgroundColor3 = Color3.fromRGB(22, 38, 25)
+    pBtn.TextColor3 = Color3.fromRGB(180, 255, 180)
+    pBtn.Text = "👤 " .. p.DisplayName
+    pBtn.Font = Enum.Font.Gotham
+    pBtn.TextSize = 6
+    pBtn.LayoutOrder = layoutOrder
+    pBtn.Parent = scrollingList
+
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, 3)
+    c.Parent = pBtn
+
+    local bStroke = Instance.new("UIStroke")
+    bStroke.Color = Color3.fromRGB(40, 110, 50)
+    bStroke.Thickness = 1
+    bStroke.Parent = pBtn
+
+    task.spawn(function()
+        local isFriend = false
+        pcall(function() isFriend = player:IsFriendsWith(p.UserId) end)
+        if isFriend and pBtn and pBtn.Parent then
+            pBtn.BackgroundColor3 = Color3.fromRGB(45, 20, 20)
+            pBtn.TextColor3 = Color3.fromRGB(255, 120, 120)
+            bStroke.Color = Color3.fromRGB(150, 40, 40)
+            pBtn.Text = "❤️ " .. p.DisplayName
+        end
+    end)
+
+    pBtn.MouseButton1Click:Connect(function()
+        setRandomQuote()
+        wipeAllPortals(true)
+        panelOpen = false
+        tpPlayerBtn:SetAttribute("ActiveState", false)
+        TweenService:Create(
+            slidingPanel,
+            TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+            { Size = UDim2.new(0, 0, 1, 0) }
+        ):Play()
+        tpPlayerBtn.BackgroundColor3 = Color3.fromRGB(20, 35, 25)
+
+        local char = player.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if not root then return end
+
+        local portalEntrada = createPortalInstance(root.CFrame * CFrame.new(0, 0, -5), TAG_GEN)
+        tpPlayerBtn.Text = "Enter Portal!"
+
+        local resetAtivo = true
+        task.delay(15, function()
+            if resetAtivo and portalEntrada and portalEntrada.Parent then
+                tpPlayerBtn.Text = "Select Player"
+                fecharPortal(portalEntrada)
+            end
+        end)
+
+        local touched = false
+        portalEntrada.Touched:Connect(function(hit)
+            if touched or hit.Parent ~= char then return end
+            touched = true
+            resetAtivo = false
+            tpPlayerBtn.Text = "Jumping..."
+
+            playTPSound()
+            efeitoTP()
+
+            task.delay(0.1, function()
+                if portalEntrada and portalEntrada.Parent then
+                    fecharPortal(portalEntrada)
+                end
+            end)
+
+            task.delay(0.2, function()
+                local targetChar = p.Character
+                if not targetChar then
+                    tpPlayerBtn.Text = "No Target!"
+                    task.wait(1.5)
+                    tpPlayerBtn.Text = "Select Player"
+                    return
+                end
+
+                local targetPivot = targetChar:GetPivot()
+                local actualRoot = targetChar:FindFirstChild("HumanoidRootPart") or targetChar.PrimaryPart
+
+                local currentChar = player.Character
+                local currentRoot = currentChar and currentChar:FindFirstChild("HumanoidRootPart")
+                if not currentRoot then return end
+
+                if actualRoot then
+                    currentRoot.CFrame = actualRoot.CFrame * CFrame.new(0, 0, -4)
+                    tpPlayerBtn.Text = "Select Player"
+                else
+                    currentRoot.CFrame = targetPivot * CFrame.new(0, 5, 0)
+                    currentRoot.Anchored = true
+                    pcall(function()
+                        player:RequestStreamAroundAsync(targetPivot.Position)
+                    end)
+
+                    local timeout = tick() + 5
+                    while tick() < timeout do
+                        actualRoot = targetChar:FindFirstChild("HumanoidRootPart") or targetChar.PrimaryPart
+                        if actualRoot then break end
+                        task.wait(0.05)
+                    end
+
+                    if actualRoot then
+                        currentRoot.CFrame = actualRoot.CFrame * CFrame.new(0, 0, -4)
+                    else
+                        tpPlayerBtn.Text = "Ghosted!"
+                        task.wait(1.5)
+                    end
+                    currentRoot.Anchored = false
+                    tpPlayerBtn.Text = "Select Player"
+                end
+
+                task.wait(0.05)
+                local currentChar2 = player.Character
+                if currentChar2 then
+                    spawnPortalSaida(currentChar2)
+                end
+            end)
+        end)
+    end)
+
+    return pBtn
+end
+
+-- Função de refresh incremental
 local function refreshPlayerList()
-    for _, child in ipairs(scrollingList:GetChildren()) do
-        if child:IsA("TextButton") then child:Destroy() end
+    -- ✅ Remove botões de quem saiu
+    for userId, btn in pairs(playerBtns) do
+        local jogador = Players:GetPlayerByUserId(userId)
+        if not jogador or jogador == player then
+            if btn and btn.Parent then btn:Destroy() end
+            playerBtns[userId] = nil
+        end
     end
 
+    -- ✅ Adiciona botões de quem entrou
     local count = 0
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= player then
             count = count + 1
-            local pBtn = Instance.new("TextButton")
-            pBtn.Size = UDim2.new(1, 0, 0, 17)
-            pBtn.BackgroundColor3 = Color3.fromRGB(22, 38, 25)
-            pBtn.TextColor3 = Color3.fromRGB(180, 255, 180)
-            pBtn.Text = "👤 " .. p.DisplayName
-            pBtn.Font = Enum.Font.Gotham
-            pBtn.TextSize = 6
-            pBtn.Parent = scrollingList
 
-            local c = Instance.new("UICorner")
-            c.CornerRadius = UDim.new(0, 3)
-            c.Parent = pBtn
-
-            local bStroke = Instance.new("UIStroke")
-            bStroke.Color = Color3.fromRGB(40, 110, 50)
-            bStroke.Thickness = 1
-            bStroke.Parent = pBtn
-
-            task.spawn(function()
-                local isFriend = false
-                pcall(function() isFriend = player:IsFriendsWith(p.UserId) end)
-                if isFriend and pBtn and pBtn.Parent then
-                    pBtn.BackgroundColor3 = Color3.fromRGB(45, 20, 20)
-                    pBtn.TextColor3 = Color3.fromRGB(255, 120, 120)
-                    bStroke.Color = Color3.fromRGB(150, 40, 40)
-                    pBtn.Text = "❤️ " .. p.DisplayName
-                end
-            end)
-
-            pBtn.MouseButton1Click:Connect(function()
-                setRandomQuote()
-                wipeAllPortals(true)
-                panelOpen = false
-                tpPlayerBtn:SetAttribute("ActiveState", false)
-                TweenService:Create(
-                    slidingPanel,
-                    TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
-                    { Size = UDim2.new(0, 0, 1, 0) }
-                ):Play()
-                tpPlayerBtn.BackgroundColor3 = Color3.fromRGB(20, 35, 25)
-
-                local char = player.Character
-                local root = char and char:FindFirstChild("HumanoidRootPart")
-                if not root then return end
-
-                -- 🌀 Cria portal de ENTRADA na frente do jogador
-                local portalEntrada = createPortalInstance(root.CFrame * CFrame.new(0, 0, -5), TAG_GEN)
-                tpPlayerBtn.Text = "Enter Portal!"
-
-                local resetAtivo = true
-                task.delay(15, function()
-                    if resetAtivo and portalEntrada and portalEntrada.Parent then
-                        tpPlayerBtn.Text = "Select Player"
-                        fecharPortal(portalEntrada)
-                    end
-                end)
-
-                local touched = false
-                portalEntrada.Touched:Connect(function(hit)
-                    if touched or hit.Parent ~= char then return end
-                    touched = true
-                    resetAtivo = false
-                    tpPlayerBtn.Text = "Jumping..."
-
-                    playTPSound()
-                    efeitoTP()
-
-                    -- Fecha o portal de ENTRADA
-                    task.delay(0.1, function()
-                        if portalEntrada and portalEntrada.Parent then
-                            fecharPortal(portalEntrada)
-                        end
-                    end)
-
-                    -- 🌀 Teleporta
-                    task.delay(0.2, function()
-                        local targetChar = p.Character
-                        if not targetChar then
-                            tpPlayerBtn.Text = "No Target!"
-                            task.wait(1.5)
-                            tpPlayerBtn.Text = "Select Player"
-                            return
-                        end
-
-                        local targetPivot = targetChar:GetPivot()
-                        local actualRoot = targetChar:FindFirstChild("HumanoidRootPart") or targetChar.PrimaryPart
-
-                        local currentChar = player.Character
-                        local currentRoot = currentChar and currentChar:FindFirstChild("HumanoidRootPart")
-                        if not currentRoot then return end
-
-                        if actualRoot then
-                            currentRoot.CFrame = actualRoot.CFrame * CFrame.new(0, 0, -4)
-                            tpPlayerBtn.Text = "Select Player"
-                        else
-                            currentRoot.CFrame = targetPivot * CFrame.new(0, 5, 0)
-                            currentRoot.Anchored = true
-                            pcall(function()
-                                player:RequestStreamAroundAsync(targetPivot.Position)
-                            end)
-
-                            local timeout = tick() + 5
-                            while tick() < timeout do
-                                actualRoot = targetChar:FindFirstChild("HumanoidRootPart") or targetChar.PrimaryPart
-                                if actualRoot then break end
-                                task.wait(0.05)
-                            end
-
-                            if actualRoot then
-                                currentRoot.CFrame = actualRoot.CFrame * CFrame.new(0, 0, -4)
-                            else
-                                tpPlayerBtn.Text = "Ghosted!"
-                                task.wait(1.5)
-                            end
-                            currentRoot.Anchored = false
-                            tpPlayerBtn.Text = "Select Player"
-                        end
-
-                        -- 🌀 Spawna portal de saída (fundo transparente, textura fade)
-                        task.wait(0.05)
-                        local currentChar2 = player.Character
-                        if currentChar2 then
-                            spawnPortalSaida(currentChar2)
-                        end
-                    end)
-                end)
-            end)
+            if playerBtns[p.UserId] then
+                -- Já existe — só atualiza LayoutOrder
+                playerBtns[p.UserId].LayoutOrder = count
+            else
+                -- Cria novo
+                playerBtns[p.UserId] = criarBotaoPlayer(p, count)
+            end
         end
     end
 
     scrollingList.CanvasSize = UDim2.new(0, 0, 0, count * 19)
     return count
 end
+
+-- 🔄 Botão de refresh clicado
+refreshBtn.MouseButton1Click:Connect(function()
+    refreshBtn.Text = "⏳"
+
+    local count = refreshPlayerList()
+
+    TweenService:Create(refreshBtn, TweenInfo.new(0.15, Enum.EasingStyle.Quad), {
+        BackgroundColor3 = Color3.fromRGB(40, 140, 50)
+    }):Play()
+
+    task.wait(0.3)
+
+    refreshBtn.Text = "🔄"
+    TweenService:Create(refreshBtn, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
+        BackgroundColor3 = Color3.fromRGB(20, 50, 30)
+    }):Play()
+
+    -- ✅ Feedback: título mostra contagem por 2s
+    panelTitle.Text = "🌀 TARGETS (" .. count .. ") 🌀"
+
+    task.delay(2, function()
+        if panelTitle and panelTitle.Parent then
+            panelTitle.Text = "🌀 TARGETS 🌀"
+        end
+    end)
+end)
 
 --=============================================================
 -- BUTTONS
@@ -1409,22 +1474,39 @@ tpPlayerBtn.MouseButton1Click:Connect(function()
 end)
 
 Players.PlayerAdded:Connect(function()
-    if panelOpen then refreshPlayerList() end
+    if panelOpen then
+        task.wait(0.5)  -- espera carregar o personagem
+        refreshPlayerList()
+    end
 end)
 
-Players.PlayerRemoving:Connect(function()
-    if panelOpen then
-        local remaining = refreshPlayerList()
-        if remaining == 0 then
-            panelOpen = false
-            tpPlayerBtn:SetAttribute("ActiveState", false)
-            TweenService:Create(
-                slidingPanel,
-                TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
-                { Size = UDim2.new(0, 0, 1, 0) }
-            ):Play()
-            tpPlayerBtn.BackgroundColor3 = Color3.fromRGB(20, 35, 25)
+Players.PlayerRemoving:Connect(function(p)
+    -- ✅ Remove o botão na hora
+    local btn = playerBtns[p.UserId]
+    if btn and btn.Parent then
+        btn:Destroy()
+        playerBtns[p.UserId] = nil
+    end
+
+    -- Recalcula o canvas
+    local count = 0
+    for _, child in ipairs(scrollingList:GetChildren()) do
+        if child:IsA("TextButton") and child.Name ~= "RefreshBtn" then
+            count = count + 1
         end
+    end
+    scrollingList.CanvasSize = UDim2.new(0, 0, 0, count * 19)
+
+    -- Se não sobrou ninguém, fecha o painel
+    if panelOpen and count == 0 then
+        panelOpen = false
+        tpPlayerBtn:SetAttribute("ActiveState", false)
+        TweenService:Create(
+            slidingPanel,
+            TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+            { Size = UDim2.new(0, 0, 1, 0) }
+        ):Play()
+        tpPlayerBtn.BackgroundColor3 = Color3.fromRGB(20, 35, 25)
     end
 end)
 
@@ -1630,4 +1712,4 @@ closeBtn.MouseButton1Click:Connect(function()
     fullCleanup()
 end)
 
-print("✅ Prime Rick Portal GUI v9 + Void 1000 + Grama + Tolerância 3s")
+print("✅ Prime Rick Portal GUI v11 + Refresh incremental + Void 1000 + Grama + Tolerância 3s")
