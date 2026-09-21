@@ -1,5 +1,5 @@
 --=============================================================
--- RICK PRIME — Portal GUI + Marcação + Anti-TP (v5)
+-- RICK PRIME — Portal GUI + Marcação + Anti-TP (v7)
 --=============================================================
 local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
@@ -31,11 +31,12 @@ local PORTAL_TEXTURE = "rbxthumb://type=Asset&id=" .. PORTAL_ASSET_ID .. "&w=420
 local PORTAL_LOOP_SOUND_ID = "rbxassetid://9063726568"
 local TP_AUDIO_ID = "rbxassetid://74562584385247"
 
-local TAG_GEN  = "RP_Gen_"  .. player.UserId
-local TAG_M1   = "RP_M1_"   .. player.UserId
-local TAG_M2   = "RP_M2_"   .. player.UserId
-local TAG_VOID = "RP_Void_" .. player.UserId
-local TAG_RET  = "RP_Ret_"  .. player.UserId
+local TAG_GEN   = "RP_Gen_"   .. player.UserId
+local TAG_M1    = "RP_M1_"    .. player.UserId
+local TAG_M2    = "RP_M2_"    .. player.UserId
+local TAG_VOID  = "RP_Void_"  .. player.UserId
+local TAG_RET   = "RP_Ret_"   .. player.UserId
+local TAG_SAIDA = "RP_Saida_" .. player.UserId
 
 local activePortals = {}
 local marcacaoP1, marcacaoP2 = nil, nil
@@ -51,13 +52,10 @@ local ATP = {
     IgnorarSeCaindo = true,
     VelocidadeCaindoMax = -50,
     IgnorarJanela = 1.5,
-    -- ✅ NOVO: janela de pulo ignorada
     JanelaPulo = 0.5,
 }
 
 local atpUltPos, atpUltimoCheck, atpCooldown, atpUltimoRespawn = nil, 0, false, 0
-
--- ✅ Detecta se o jogador pulou recentemente
 local atpUltimoPulo = 0
 local atpPulando = false
 
@@ -65,24 +63,6 @@ UserInputService.JumpRequest:Connect(function()
     atpUltimoPulo = tick()
     atpPulando = true
 end)
-
--- ✅ Também detecta pulo via Humanoid state (mais confiável)
-local function estaNoAr(hrp)
-    if not hrp then return false end
-    local state = hrp:FindFirstChild("Humanoid")  -- fallback
-    if not state then
-        local char = hrp.Parent
-        if char then
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if hum then
-                local st = hum:GetState()
-                return st == Enum.HumanoidStateType.Jumping
-                    or st == Enum.HumanoidStateType.Freefall
-            end
-        end
-    end
-    return false
-end
 
 --=============================================================
 -- FX GUI
@@ -436,7 +416,7 @@ local function wipeAllPortals(comEfeito)
     return total
 end
 
-for _, tag in ipairs({TAG_GEN, TAG_M1, TAG_M2, TAG_VOID, TAG_RET}) do
+for _, tag in ipairs({TAG_GEN, TAG_M1, TAG_M2, TAG_VOID, TAG_RET, TAG_SAIDA}) do
     for _, p in ipairs(CollectionService:GetTagged(tag)) do
         if p then p:Destroy() end
     end
@@ -704,7 +684,7 @@ TweenService:Create(
 
 local title = Instance.new("TextLabel")
 title.Size, title.Position = UDim2.new(1, 0, 0, 13), UDim2.new(0, 0, 0, 2)
-title.BackgroundTransparency, title.Text = 1, "⚡ C-137 ⚡"
+title.BackgroundTransparency, title.Text = 1, "⚡ Prime Rick ⚡"
 title.TextColor3, title.Font, title.TextSize = Color3.fromRGB(50, 255, 100), Enum.Font.GothamBlack, 8
 title.Parent = innerScreen
 
@@ -812,7 +792,7 @@ local footerLabel = Instance.new("TextLabel")
 footerLabel.Size = UDim2.new(1, 0, 0, 8)
 footerLabel.Position = UDim2.new(0, 0, 1, -9)
 footerLabel.BackgroundTransparency = 1
-footerLabel.Text = "C-137"
+footerLabel.Text = "Prime Rick"
 footerLabel.TextColor3 = Color3.fromRGB(60, 120, 70)
 footerLabel.Font = Enum.Font.Code
 footerLabel.TextSize = 5
@@ -877,7 +857,8 @@ local panelOpen = false
 --=============================================================
 -- PORTAL INSTANCE
 --=============================================================
-local function createPortalInstance(cframe, tag)
+local function createPortalInstance(cframe, tag, opcoes)
+    opcoes = opcoes or {}
     tag = tag or TAG_GEN
     local pos = cframe.Position
     local _, yRot, _ = cframe:ToOrientation()
@@ -893,15 +874,18 @@ local function createPortalInstance(cframe, tag)
     CollectionService:AddTag(portalPart, tag)
     if tag == TAG_GEN then table.insert(activePortals, portalPart) end
 
-    local portalLoop = Instance.new("Sound")
-    portalLoop.Name = "PortalLoopSound"
-    portalLoop.SoundId = PORTAL_LOOP_SOUND_ID
-    portalLoop.Volume = 2
-    portalLoop.Looped = true
-    portalLoop.RollOffMaxDistance = 150
-    portalLoop.RollOffMode = Enum.RollOffMode.InverseTapered
-    portalLoop.Parent = portalPart
-    portalLoop:Play()
+    -- 🎵 Som de loop (opcional)
+    if opcoes.comSom ~= false then
+        local portalLoop = Instance.new("Sound")
+        portalLoop.Name = "PortalLoopSound"
+        portalLoop.SoundId = PORTAL_LOOP_SOUND_ID
+        portalLoop.Volume = 2
+        portalLoop.Looped = true
+        portalLoop.RollOffMaxDistance = 150
+        portalLoop.RollOffMode = Enum.RollOffMode.InverseTapered
+        portalLoop.Parent = portalPart
+        portalLoop:Play()
+    end
 
     local portalLight = Instance.new("PointLight")
     portalLight.Color = Color3.fromRGB(50, 255, 80)
@@ -909,18 +893,21 @@ local function createPortalInstance(cframe, tag)
     portalLight.Brightness = 3
     portalLight.Parent = portalPart
 
-    local sparks = Instance.new("ParticleEmitter")
-    sparks.Color = ColorSequence.new(Color3.fromRGB(50, 255, 80))
-    sparks.Size = NumberSequence.new({
-        NumberSequenceKeypoint.new(0, 0.3),
-        NumberSequenceKeypoint.new(1, 0)
-    })
-    sparks.Lifetime = NumberRange.new(0.5, 1.2)
-    sparks.Rate = 25
-    sparks.Speed = NumberRange.new(3, 7)
-    sparks.SpreadAngle = Vector2.new(360, 360)
-    sparks.EmissionDirection = Enum.NormalId.Front
-    sparks.Parent = portalPart
+    -- ✨ Partículas (opcional)
+    if opcoes.comParticulas ~= false then
+        local sparks = Instance.new("ParticleEmitter")
+        sparks.Color = ColorSequence.new(Color3.fromRGB(50, 255, 80))
+        sparks.Size = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.3),
+            NumberSequenceKeypoint.new(1, 0)
+        })
+        sparks.Lifetime = NumberRange.new(0.5, 1.2)
+        sparks.Rate = 25
+        sparks.Speed = NumberRange.new(3, 7)
+        sparks.SpreadAngle = Vector2.new(360, 360)
+        sparks.EmissionDirection = Enum.NormalId.Front
+        sparks.Parent = portalPart
+    end
 
     local function createSurfaceFace(normalFace)
         local surf = Instance.new("SurfaceGui")
@@ -947,22 +934,83 @@ local function createPortalInstance(cframe, tag)
     local fFront = createSurfaceFace(Enum.NormalId.Front)
     local bFront = createSurfaceFace(Enum.NormalId.Back)
 
+    -- Cresce com "pop"
     TweenService:Create(
         portalPart,
-        TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+        TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
         { Size = Vector3.new(7, 7, 0.1) }
     ):Play()
 
+    -- 🔄 Rotação das imagens (opcional)
+    if opcoes.comGiro ~= false then
+        task.spawn(function()
+            while portalPart and portalPart.Parent do
+                local fRot = (fFront.Rotation + 8) % 360
+                fFront.Rotation = fRot
+                bFront.Rotation = fRot
+                task.wait(0.03)
+            end
+        end)
+    end
+
+    return portalPart, fFront, bFront
+end
+
+--=============================================================
+-- 🌀 PORTAL DE SAÍDA (fundo transparente, textura com fade)
+--=============================================================
+local function spawnPortalSaida(char)
+    if not char or not char.Parent then return end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+
+    -- 🎯 Aparece BEM na frente do personagem (2 studs)
+    local cframeInicial = root.CFrame * CFrame.new(0, 0, -2)
+
+    -- 🚫 Sem som, sem partículas, sem giro
+    local portal, fFront, bFront = createPortalInstance(cframeInicial, TAG_SAIDA, {
+        comSom = false,
+        comParticulas = false,
+        comGiro = false,
+    })
+
+    -- 🔦 Fundo do portal totalmente transparente desde o início
+    portal.Transparency = 1
+
+    -- 🎨 Textura começa 100% visível (transparência 0)
+    if fFront then fFront.ImageTransparency = 0 end
+    if bFront then bFront.ImageTransparency = 0 end
+
+    -- 🚀 Move pra trás + fade da textura (0 → 1)
+    local cframeFinal = cframeInicial * CFrame.new(0, 0, 4)
+
     task.spawn(function()
-        while portalPart and portalPart.Parent do
-            local fRot = (fFront.Rotation + 8) % 360
-            fFront.Rotation = fRot
-            bFront.Rotation = fRot
-            task.wait(0.03)
+        local DUR = 0.6
+        local inicio = tick()
+
+        while portal and portal.Parent do
+            local p = (tick() - inicio) / DUR
+            if p >= 1 then break end
+
+            -- Move (mantém rotação fixa — sem giro)
+            local posAtual = cframeInicial:Lerp(cframeFinal, p)
+            portal.CFrame = CFrame.new(posAtual.Position) * (cframeInicial - cframeInicial.Position)
+
+            -- 🎨 Fade da textura (0 → 1)
+            local transparencia = math.clamp(p, 0, 1)
+            if fFront then fFront.ImageTransparency = transparencia end
+            if bFront then bFront.ImageTransparency = transparencia end
+
+            task.wait()
+        end
+
+        -- Remove no final
+        if portal and portal.Parent then
+            portal:Destroy()
         end
     end)
 
-    return portalPart
+    return portal
 end
 
 --=============================================================
@@ -1012,9 +1060,17 @@ local function abrirPortalVoid()
             criarVoidPlace()
             monitorarSaidaDoVoid()
 
+            -- 🌀 Teleporta pro Void
             local destino = CFrame.new(VOID_CENTRO.X, VOID_CENTRO.Y + 5, VOID_CENTRO.Z)
             if root and root.Parent then
                 root.CFrame = destino
+            end
+
+            -- 🌀 Portal de saída (aparece na frente e some voando pra trás)
+            task.wait(0.05)
+            local charVoid = player.Character
+            if charVoid then
+                spawnPortalSaida(charVoid)
             end
 
             task.wait(0.3)
@@ -1049,6 +1105,13 @@ local function abrirPortalVoid()
                         else
                             currentRoot.CFrame = CFrame.new(0, 50, 0)
                         end
+                    end
+
+                    -- 🌀 Portal de saída também ao voltar do Void
+                    task.wait(0.05)
+                    local charVolta = player.Character
+                    if charVolta then
+                        spawnPortalSaida(charVolta)
                     end
 
                     task.wait(0.3)
@@ -1210,19 +1273,20 @@ local function refreshPlayerList()
                 local root = char and char:FindFirstChild("HumanoidRootPart")
                 if not root then return end
 
-                local tpPortal = createPortalInstance(root.CFrame * CFrame.new(0, 0, -5), TAG_GEN)
+                -- 🌀 Cria portal de ENTRADA na frente do jogador
+                local portalEntrada = createPortalInstance(root.CFrame * CFrame.new(0, 0, -5), TAG_GEN)
                 tpPlayerBtn.Text = "Enter Portal!"
 
                 local resetAtivo = true
                 task.delay(15, function()
-                    if resetAtivo and tpPortal and tpPortal.Parent then
+                    if resetAtivo and portalEntrada and portalEntrada.Parent then
                         tpPlayerBtn.Text = "Select Player"
-                        fecharPortal(tpPortal)
+                        fecharPortal(portalEntrada)
                     end
                 end)
 
                 local touched = false
-                tpPortal.Touched:Connect(function(hit)
+                portalEntrada.Touched:Connect(function(hit)
                     if touched or hit.Parent ~= char then return end
                     touched = true
                     resetAtivo = false
@@ -1231,9 +1295,15 @@ local function refreshPlayerList()
                     playTPSound()
                     efeitoTP()
 
-                    task.spawn(function()
-                        task.wait(0.2)
+                    -- Fecha o portal de ENTRADA
+                    task.delay(0.1, function()
+                        if portalEntrada and portalEntrada.Parent then
+                            fecharPortal(portalEntrada)
+                        end
+                    end)
 
+                    -- 🌀 Teleporta
+                    task.delay(0.2, function()
                         local targetChar = p.Character
                         if not targetChar then
                             tpPlayerBtn.Text = "No Target!"
@@ -1275,11 +1345,12 @@ local function refreshPlayerList()
                             currentRoot.Anchored = false
                             tpPlayerBtn.Text = "Select Player"
                         end
-                    end)
 
-                    task.delay(0.5, function()
-                        if tpPortal and tpPortal.Parent then
-                            fecharPortal(tpPortal)
+                        -- 🌀 Spawna portal de saída (fundo transparente, textura fade)
+                        task.wait(0.05)
+                        local currentChar2 = player.Character
+                        if currentChar2 then
+                            spawnPortalSaida(currentChar2)
                         end
                     end)
                 end)
@@ -1416,14 +1487,12 @@ RunService.Heartbeat:Connect(function()
 
     local agora = os.clock()
 
-    -- ✅ NOVO: ignora se o jogador pulou recentemente
     if agora - atpUltimoPulo < ATP.JanelaPulo then
         atpUltPos = hrp.Position
         atpUltimoCheck = agora
         return
     end
 
-    -- ✅ NOVO: ignora se está no ar (pulando/em queda controlada)
     local state = humanoid:GetState()
     if state == Enum.HumanoidStateType.Jumping
         or state == Enum.HumanoidStateType.Freefall
@@ -1514,6 +1583,7 @@ local function fullCleanup()
     wipePortalsPorTag(TAG_M2, true)
     wipePortalsPorTag(TAG_VOID, true)
     wipePortalsPorTag(TAG_RET, true)
+    wipePortalsPorTag(TAG_SAIDA, true)
     table.clear(activePortals)
 
     deletarVoidPlace()
@@ -1551,4 +1621,4 @@ closeBtn.MouseButton1Click:Connect(function()
     fullCleanup()
 end)
 
-print("✅ Rick Portal GUI v5 + Anti-TP ignora pulo")
+print("✅ Prime Rick Portal GUI v7 + Void com portal de saída")
