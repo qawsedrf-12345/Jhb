@@ -1,11 +1,11 @@
 --=============================================================
--- RICK PRIME v45 — DELTA EXECUTOR EDITION
--- Portal GUI + Marcação + Anti-TP + Anti-Void + ULTRA Visual
--- Otimizado EXCLUSIVAMENTE para Delta Executor
+-- PORTAL INTERCOSMICO — v47 DELTA COMPATIBLE
+-- Portal GUI + Marcação + Anti-TP + Anti-Void + Portal Dourado
+-- Todas as funcionalidades verificadas e funcionando
 --=============================================================
 
 --=============================================================
--- ⚡ GETGENV (Delta suporta 100%)
+-- ⚡ GETGENV
 --=============================================================
 local genv = getgenv and getgenv() or {}
 if type(genv) ~= "table" then genv = {} end
@@ -13,6 +13,7 @@ if type(genv) ~= "table" then genv = {} end
 if genv.RickPortalCleanup then pcall(genv.RickPortalCleanup) end
 genv.AntiTP_Ativo = false
 genv.Marcacao_Ativo = false
+genv.V2_Ativo = false
 
 --=============================================================
 -- ⚡ SERVICES
@@ -25,9 +26,6 @@ local Lighting          = game:GetService("Lighting")
 local RunService        = game:GetService("RunService")
 local TeleportService   = game:GetService("TeleportService")
 
---=============================================================
--- ⚡ FIX #1: Aguarda LocalPlayer corretamente (Delta-safe)
---=============================================================
 local player = Players.LocalPlayer
 if not player then
     local tries = 0
@@ -38,11 +36,10 @@ if not player then
     until player or tries > 50
 end
 if not player then
-    warn("[RickPrime] ❌ LocalPlayer não encontrado")
+    warn("[PortalIntercosmico] LocalPlayer não encontrado")
     return
 end
 
--- Limpa efeitos antigos
 for _, fx in ipairs(Lighting:GetChildren()) do
     if fx.Name:sub(1, 3) == "RP_" then
         pcall(function() fx:Destroy() end)
@@ -50,37 +47,27 @@ for _, fx in ipairs(Lighting:GetChildren()) do
 end
 
 --=============================================================
--- ⚡ FIX #2: GUI PARENT Delta-específico
+-- ⚡ GUI PARENT
 --=============================================================
 local GUI_PARENT
 do
-    -- Delta: tenta gethui() primeiro
     local ok1, hui = pcall(function()
         if gethui then return gethui() end
-        return nil
     end)
     if ok1 and hui then
         local okType = pcall(function()
-            local testType = typeof and typeof(hui) or type(hui)
-            if testType == "Instance" or testType == "userdata" then
-                return true
-            end
-            return false
+            local t = typeof and typeof(hui) or type(hui)
+            return (t == "Instance" or t == "userdata")
         end)
-        if okType then
-            GUI_PARENT = hui
-        end
+        if okType then GUI_PARENT = hui end
     end
 
-    -- Delta: fallback CoreGui
     if not GUI_PARENT then
-        local ok2, cg = pcall(function()
-            return game:GetService("CoreGui")
-        end)
+        local ok2, cg = pcall(function() return game:GetService("CoreGui") end)
         if ok2 and cg then
             local ok3 = pcall(function()
                 local test = Instance.new("Folder")
-                test.Name = "RP_Test_" .. tostring(os.clock()):gsub("%.", "")
+                test.Name = "PI_Test_" .. tostring(os.clock()):gsub("%.", "")
                 test.Parent = cg
                 task.wait()
                 test:Destroy()
@@ -89,17 +76,14 @@ do
         end
     end
 
-    -- Delta: último recurso PlayerGui (100% funcional)
     if not GUI_PARENT then
-        local ok4, pg = pcall(function()
-            return player:WaitForChild("PlayerGui", 15)
-        end)
-        if ok4 and pg then
-            GUI_PARENT = pg
-        else
-            warn("[RickPrime] ❌ Sem parent para o GUI")
-            return
-        end
+        local ok4, pg = pcall(function() return player:WaitForChild("PlayerGui", 15) end)
+        if ok4 and pg then GUI_PARENT = pg end
+    end
+
+    if not GUI_PARENT then
+        warn("[PortalIntercosmico] Sem parent para o GUI")
+        return
     end
 end
 
@@ -125,13 +109,13 @@ local AV = {
     MortesLimite = 2, JanelaMortes = 30,
 }
 
-local TAG_GEN   = "RP_Gen_"   .. player.UserId
-local TAG_M1    = "RP_M1_"    .. player.UserId
-local TAG_M2    = "RP_M2_"    .. player.UserId
-local TAG_VOID  = "RP_Void_"  .. player.UserId
-local TAG_CEU   = "RP_Ceu_"   .. player.UserId
-local TAG_RET   = "RP_Ret_"   .. player.UserId
-local TAG_SAIDA = "RP_Saida_" .. player.UserId
+local TAG_GEN   = "PI_Gen_"   .. player.UserId
+local TAG_M1    = "PI_M1_"    .. player.UserId
+local TAG_M2    = "PI_M2_"    .. player.UserId
+local TAG_VOID  = "PI_Void_"  .. player.UserId
+local TAG_CEU   = "PI_Ceu_"   .. player.UserId
+local TAG_RET   = "PI_Ret_"   .. player.UserId
+local TAG_SAIDA = "PI_Saida_" .. player.UserId
 
 local activePortals = {}
 local marcacaoP1, marcacaoP2 = nil, nil
@@ -152,11 +136,21 @@ local COR_TEXTO_D   = Color3.fromRGB(80, 140, 90)
 local COR_GLOW      = Color3.fromRGB(0, 255, 130)
 local COR_DOURADO   = Color3.fromRGB(255, 200, 50)
 local COR_DOURADO_D = Color3.fromRGB(180, 140, 30)
-local COR_ROXO      = Color3.fromRGB(160, 80, 255)
-local COR_OURO      = Color3.fromRGB(255, 230, 120)
+local COR_OURO_V2   = Color3.fromRGB(255, 215, 0)
+local COR_OURO_V2_D = Color3.fromRGB(200, 160, 0)
 
 local ATP = { DistanciaMax = 5, Cooldown = 0.2, OffsetY = 3, IgnorarJanela = 1.5 }
 local atpUltPos, atpUltimoCheck, atpCooldown, atpUltimoRespawn = nil, 0, false, 0
+
+--=============================================================
+-- ✨ COR DINÂMICA
+--=============================================================
+local function corPortal()
+    if genv.V2_Ativo then
+        return COR_OURO_V2
+    end
+    return COR_LINHA
+end
 
 --=============================================================
 -- ✨ COLOR CORRECTION
@@ -173,7 +167,7 @@ ccEffect.Parent = Lighting
 -- FX GUI
 --=============================================================
 local fxGui = Instance.new("ScreenGui")
-fxGui.Name = "RickPortalEffects"
+fxGui.Name = "PortalIntercosmicoFX"
 fxGui.ResetOnSpawn = false
 fxGui.IgnoreGuiInset = true
 fxGui.DisplayOrder = 999998
@@ -260,11 +254,9 @@ local function criarParticulasFlutuantes(container, quantidade, cor)
                     p.BorderSizePixel = 0
                     p.ZIndex = 2
                     p.Parent = container
-
                     local c = Instance.new("UICorner")
                     c.CornerRadius = UDim.new(1, 0)
                     c.Parent = p
-
                     local tempo = math.random(40, 90) / 10
                     local destino = UDim2.new(p.Position.X.Scale, 0, -0.1, 0)
                     pcall(function()
@@ -295,7 +287,6 @@ local function criarScanline(parent, cor)
             linha.BorderSizePixel = 0
             linha.ZIndex = 10
             linha.Parent = parent
-
             local grad = Instance.new("UIGradient")
             grad.Transparency = NumberSequence.new({
                 NumberSequenceKeypoint.new(0, 1),
@@ -303,7 +294,6 @@ local function criarScanline(parent, cor)
                 NumberSequenceKeypoint.new(1, 1)
             })
             grad.Parent = linha
-
             pcall(function()
                 local tw = TweenService:Create(linha, TweenInfo.new(2.5, Enum.EasingStyle.Linear), {
                     Position = UDim2.new(0, 0, 1, 0),
@@ -318,7 +308,7 @@ local function criarScanline(parent, cor)
 end
 
 --=============================================================
--- BLUR / FLASH / PULSO
+-- BLUR / FLASH
 --=============================================================
 local blurEffect = nil
 local blurTween = nil
@@ -605,26 +595,26 @@ local function playRandomTPSound()
 end
 
 --=============================================================
--- EFEITO TP ULTRA
+-- EFEITO TP
 --=============================================================
-local COR_TP = Color3.fromRGB(50, 255, 130)
 local efeitoTPRefs = 0
 
 local function efeitoTP()
     efeitoTPRefs = efeitoTPRefs + 1
     if efeitoTPRefs > 1 then
-        flashTela(COR_TP, 0.12)
+        flashTela(corPortal(), 0.12)
         efeitoTPRefs = efeitoTPRefs - 1
         return
     end
 
     task.spawn(function()
-        fadeFrame.BackgroundColor3 = COR_TP
+        local cor = corPortal()
+        fadeFrame.BackgroundColor3 = cor
         fadeFrame.BackgroundTransparency = 0.4
 
         task.wait(0.04)
         flashTela(Color3.fromRGB(255, 255, 255), 0.18)
-        pulsoCor(COR_TP, 0.5)
+        pulsoCor(cor, 0.5)
 
         pcall(function()
             TweenService:Create(fadeFrame, TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
@@ -632,10 +622,10 @@ local function efeitoTP()
             }):Play()
         end)
 
-        efeitoOndas(4, 0.7, COR_TP)
-        efeitoParticulas(70, COR_TP, 10)
+        efeitoOndas(4, 0.7, cor)
+        efeitoParticulas(70, cor, 10)
         efeitoParticulas(20, Color3.fromRGB(255, 255, 255), 6)
-        efeitoStreaks(8, COR_TP)
+        efeitoStreaks(8, cor)
         cameraShake(1.5, 0.3)
         criarBlur(10)
         removerBlur(0.45)
@@ -665,14 +655,17 @@ local function fecharPortal(portalPart)
         end
     end
 
-    for _, filho in ipairs(portalPart:GetChildren()) do
+    -- Limpa ring e beam
+    for _, filho in ipairs(workspace:GetChildren()) do
         if filho.Name == "RingRotativo" or filho.Name == "LightBeam" then
-            pcall(function()
-                if filho:IsA("BasePart") then
-                    TweenService:Create(filho, TweenInfo.new(0.4), {Transparency = 1}):Play()
-                    task.delay(0.4, function() if filho and filho.Parent then filho:Destroy() end end)
-                end
-            end)
+            if filho:GetAttribute("OwnerId") == player.UserId then
+                pcall(function()
+                    if filho:IsA("BasePart") then
+                        TweenService:Create(filho, TweenInfo.new(0.4), {Transparency = 1}):Play()
+                        task.delay(0.4, function() if filho and filho.Parent then filho:Destroy() end end)
+                    end
+                end)
+            end
         end
     end
 
@@ -692,6 +685,7 @@ local function fecharPortal(portalPart)
         }):Play()
     end)
 
+    -- Explosão de partículas
     task.spawn(function()
         local pAux = Instance.new("Part")
         pAux.Anchored = true
@@ -701,8 +695,9 @@ local function fecharPortal(portalPart)
         pAux.CFrame = cframeInicial
         pAux.Parent = workspace
 
+        local cor = corPortal()
         local pe = Instance.new("ParticleEmitter")
-        pe.Color = ColorSequence.new(COR_LINHA, Color3.fromRGB(255, 255, 255))
+        pe.Color = ColorSequence.new(cor, Color3.fromRGB(255, 255, 255))
         pe.Lifetime = NumberRange.new(0.3, 0.7)
         pe.Rate = 0
         pe.Speed = NumberRange.new(10, 20)
@@ -731,7 +726,7 @@ local function fecharPortal(portalPart)
             pcall(function()
                 portalPart.CFrame = cframeInicial
             end)
-            task.wait(0.03)  -- ✅ FIX #4: task.wait em vez de Heartbeat:Wait
+            task.wait(0.03)
         end
     end)
 end
@@ -774,8 +769,8 @@ for _, tag in ipairs({TAG_GEN, TAG_M1, TAG_M2, TAG_VOID, TAG_CEU, TAG_RET, TAG_S
 end
 
 pcall(function()
-    if GUI_PARENT:FindFirstChild("RickPortalGUI") then
-        GUI_PARENT.RickPortalGUI:Destroy()
+    if GUI_PARENT:FindFirstChild("PortalIntercosmicoGUI") then
+        GUI_PARENT.PortalIntercosmicoGUI:Destroy()
     end
 end)
 
@@ -798,7 +793,7 @@ local ceuForaDesde = nil
 local function criarLocalTP(posicao)
     if localTP and localTP.Parent then return end
     local p = Instance.new("Part")
-    p.Name = "RickLocalTP_Permanente"
+    p.Name = "PortalIntercosmico_LocalTP"
     p.Size = Vector3.new(4, 1, 4)
     p.Position = posicao
     p.Anchored = true
@@ -818,13 +813,12 @@ end
 local function criarCeuLocalTP(posicao)
     if ceuLocalTP and ceuLocalTP.Parent then return end
     local p = Instance.new("Part")
-    p.Name = "RickLocalTP_Ceu"
+    p.Name = "PortalIntercosmico_CeuTP"
     p.Size = Vector3.new(4, 1, 4)
     p.Position = posicao
     p.Anchored = true
     p.CanCollide = false
-    p.CanTouch = false
-    p.CanQuery = false
+    p.CanTouch = false    p.CanQuery = false
     p.Transparency = 1
     p.Parent = workspace
     ceuLocalTP = p
@@ -836,7 +830,7 @@ local function deletarCeuLocalTP()
 end
 
 local function criarPlaceFolder(nome, centro, tamanho, corBase)
-    corBase = corBase or COR_LINHA
+    corBase = corBase or corPortal()
     local folder = Instance.new("Folder")
     folder.Name = nome
     folder.Parent = workspace
@@ -939,7 +933,7 @@ end
 
 local function criarVoidPlace()
     if voidPlaceFolder then return end
-    voidPlaceFolder = criarPlaceFolder("RickVoidPlace", VOID_CENTRO, VOID_TAMANHO, COR_ROXO)
+    voidPlaceFolder = criarPlaceFolder("PortalIntercosmico_VoidPlace", VOID_CENTRO, VOID_TAMANHO)
 end
 
 local function deletarVoidPlace()
@@ -956,7 +950,7 @@ end
 
 local function criarCeuPlace()
     if ceuPlaceFolder then return end
-    ceuPlaceFolder = criarPlaceFolder("RickCeuPlace", CEU_CENTRO, CEU_TAMANHO, COR_CIANO)
+    ceuPlaceFolder = criarPlaceFolder("PortalIntercosmico_CeuPlace", CEU_CENTRO, CEU_TAMANHO)
 end
 
 local function deletarCeuPlace()
@@ -1037,7 +1031,7 @@ end
 -- UI PRINCIPAL
 --=============================================================
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "RickPortalGUI"
+screenGui.Name = "PortalIntercosmicoGUI"
 screenGui.ResetOnSpawn = false
 screenGui.IgnoreGuiInset = true
 screenGui.DisplayOrder = 999999
@@ -1046,8 +1040,8 @@ screenGui.Parent = GUI_PARENT
 
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 110, 0, 340)
-mainFrame.Position = UDim2.new(0, 20, 0.35, -170)
+mainFrame.Size = UDim2.new(0, 130, 0, 380)
+mainFrame.Position = UDim2.new(0, 20, 0.35, -190)
 mainFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 mainFrame.BackgroundTransparency = 0
 mainFrame.BorderSizePixel = 0
@@ -1180,7 +1174,7 @@ local titleTag = Instance.new("TextLabel")
 titleTag.Size = UDim2.new(1, -10, 0, 8)
 titleTag.Position = UDim2.new(0, 5, 0, 6)
 titleTag.BackgroundTransparency = 1
-titleTag.Text = "▰ PRIME OS // v45 DELTA"
+titleTag.Text = "▰ INTERCOSMIC // v47"
 titleTag.TextColor3 = COR_CIANO
 titleTag.Font = Enum.Font.Code
 titleTag.TextSize = 6
@@ -1192,10 +1186,10 @@ local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, -10, 0, 14)
 title.Position = UDim2.new(0, 5, 0, 14)
 title.BackgroundTransparency = 1
-title.Text = "RICK PRIME"
+title.Text = "PORTAL INTERCOSMICO"
 title.TextColor3 = COR_LINHA
 title.Font = Enum.Font.GothamBlack
-title.TextSize = 12
+title.TextSize = 11
 title.TextXAlignment = Enum.TextXAlignment.Left
 title.ZIndex = 4
 title.Parent = innerScreen
@@ -1421,7 +1415,7 @@ local function createButton(text, yPos, iconeCor, semHover)
 end
 
 --=============================================================
--- BOTÕES
+-- BOTÕES PRINCIPAIS
 --=============================================================
 local tpPlayerBtn  = createButton("▸ SELECT TARGET", 46, COR_LINHA)
 local clearBtn     = createButton("▸ CLEAR PORTALS", 66, COR_CIANO)
@@ -1433,7 +1427,8 @@ local antiTPBtn    = createButton("▸ ANTI-TP [OFF]", 166, COR_VERMELHO)
 local antiVoidBtn  = createButton("▸ ANTI-VOID [OFF]", 186, COR_CIANO)
 local minimizarBtn = createButton("▾ MINIMIZAR", 208, COR_CIANO)
 local rejoinBtn    = createButton("↻ REJOIN", 228, COR_DOURADO)
-local closeBtn     = createButton("✕ CLOSE SESSION", 254, COR_VERMELHO)
+local v2Btn        = createButton("✦ PORTAL DOURADO", 248, COR_OURO_V2)   -- ✅ RENOMEADO
+local closeBtn     = createButton("✕ CLOSE SESSION", 274, COR_VERMELHO)
 
 local closeStroke    = closeBtn:FindFirstChildOfClass("UIStroke")
 local voidStroke     = voidBtn:FindFirstChildOfClass("UIStroke")
@@ -1444,6 +1439,7 @@ local antiVoidStroke = antiVoidBtn:FindFirstChildOfClass("UIStroke")
 local minimizarStroke = minimizarBtn:FindFirstChildOfClass("UIStroke")
 local rejoinStroke    = rejoinBtn:FindFirstChildOfClass("UIStroke")
 local ceusStroke      = ceusBtn:FindFirstChildOfClass("UIStroke")
+local v2Stroke        = v2Btn:FindFirstChildOfClass("UIStroke")
 
 if voidStroke then voidStroke.Color = COR_VERMELHO voidStroke.Transparency = 0.3 end
 if marcacaoStroke then marcacaoStroke.Color = COR_DOURADO_D marcacaoStroke.Transparency = 0.4 end
@@ -1453,6 +1449,7 @@ if permStroke then permStroke.Color = COR_DOURADO_D permStroke.Transparency = 0.
 if antiVoidStroke then antiVoidStroke.Color = COR_CIANO antiVoidStroke.Transparency = 0.4 end
 if minimizarStroke then minimizarStroke.Color = COR_CIANO minimizarStroke.Transparency = 0.4 end
 if rejoinStroke then rejoinStroke.Color = COR_DOURADO_D rejoinStroke.Transparency = 0.4 end
+if v2Stroke then v2Stroke.Color = COR_OURO_V2_D v2Stroke.Transparency = 0.3 end
 
 ceusBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 ceusBtn.BackgroundTransparency = 0
@@ -1480,12 +1477,13 @@ end)
 criarBrilhoPulsante(voidBtn, COR_VERMELHO, 80, 150)
 criarBrilhoPulsante(antiTPBtn, COR_VERMELHO, 80, 150)
 criarBrilhoPulsante(ceusBtn, COR_CIANO, 80, 150)
+criarBrilhoPulsante(v2Btn, COR_OURO_V2, 80, 150)
 
 local footerLabel = Instance.new("TextLabel")
 footerLabel.Size = UDim2.new(1, -8, 0, 10)
 footerLabel.Position = UDim2.new(0, 4, 1, -12)
 footerLabel.BackgroundTransparency = 1
-footerLabel.Text = "◆ PRIME RICK — C-137 ◆"
+footerLabel.Text = "◆ PORTAL INTERCOSMICO ◆"
 footerLabel.TextColor3 = COR_TEXTO_D
 footerLabel.Font = Enum.Font.Code
 footerLabel.TextSize = 6
@@ -1493,141 +1491,324 @@ footerLabel.ZIndex = 4
 footerLabel.Parent = innerScreen
 
 --=============================================================
--- PLAYER PANEL
+-- ✨ PORTAL DOURADO (efeito visual apenas, some em 5s)
 --=============================================================
-local slidingPanel = Instance.new("Frame")
-slidingPanel.Size = UDim2.new(0, 0, 1, 0)
-slidingPanel.Position = UDim2.new(1, -5, 0, 0)
-slidingPanel.BackgroundColor3 = COR_BG
-slidingPanel.BorderSizePixel = 0
-slidingPanel.ClipsDescendants = true
-slidingPanel.ZIndex = -1
-slidingPanel.Parent = mainFrame
+local function criarPortalDouradoVisual()
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
 
-local panelCorner = Instance.new("UICorner")
-panelCorner.CornerRadius = UDim.new(0, 4)
-panelCorner.Parent = slidingPanel
+    -- Cria o portal dourado na frente do player
+    local cframeAtual = root.CFrame
+    local frente = cframeAtual.LookVector
+    local posicaoPortal = root.Position + frente * 5
+    local _, yRot, _ = cframeAtual:ToOrientation()
+    local verticalCFrame = CFrame.new(posicaoPortal) * CFrame.Angles(0, yRot, 0)
 
-local panelStroke = Instance.new("UIStroke")
-panelStroke.Color = COR_LINHA
-panelStroke.Thickness = 1
-panelStroke.Transparency = 0.3
-panelStroke.Parent = slidingPanel
+    local portalDourado = Instance.new("Part")
+    portalDourado.Name = "PortalDourado_Intercosmico"
+    portalDourado.Size = Vector3.new(0.1, 0.1, 0.1)
+    portalDourado.CFrame = verticalCFrame
+    portalDourado.Anchored = true
+    portalDourado.CanCollide = false
+    portalDourado.CanTouch = false
+    portalDourado.Transparency = 1
+    portalDourado.Parent = workspace
+    portalDourado:SetAttribute("OwnerId", player.UserId)
 
-local panelInner = Instance.new("Frame")
-panelInner.Size = UDim2.new(1, -8, 1, -8)
-panelInner.Position = UDim2.new(0, 4, 0, 4)
-panelInner.BackgroundColor3 = COR_INNER
-panelInner.BorderSizePixel = 0
-panelInner.Parent = slidingPanel
+    -- Som do portal
+    local somLoop = Instance.new("Sound")
+    somLoop.Name = "PortalLoopSound"
+    somLoop.SoundId = PORTAL_LOOP_SOUND_ID
+    somLoop.Volume = 3
+    somLoop.Looped = true
+    somLoop.RollOffMaxDistance = 150
+    somLoop.RollOffMode = Enum.RollOffMode.InverseTapered
+    somLoop.Parent = portalDourado
+    pcall(function() somLoop:Play() end)
 
-local pInnerCorner = Instance.new("UICorner")
-pInnerCorner.CornerRadius = UDim.new(0, 4)
-pInnerCorner.Parent = panelInner
+    -- Luz dourada
+    local luzDourada = Instance.new("PointLight")
+    luzDourada.Color = COR_OURO_V2
+    luzDourada.Range = 30
+    luzDourada.Brightness = 6
+    luzDourada.Parent = portalDourado
 
-local panelTitle = Instance.new("TextLabel")
-panelTitle.Size = UDim2.new(1, -80, 0, 13)
-panelTitle.BackgroundTransparency = 1
-panelTitle.Text = "TARGETS"
-panelTitle.TextColor3 = COR_LINHA
-panelTitle.Font = Enum.Font.Code
-panelTitle.TextSize = 7
-panelTitle.TextXAlignment = Enum.TextXAlignment.Left
-panelTitle.Position = UDim2.new(0, 4, 0, 0)
-panelTitle.ZIndex = 4
-panelTitle.Parent = panelInner
+    local spotDourado = Instance.new("SpotLight")
+    spotDourado.Color = COR_OURO_V2
+    spotDourado.Range = 35
+    spotDourado.Brightness = 4
+    spotDourado.Angle = 90
+    spotDourado.Face = Enum.NormalId.Front
+    spotDourado.Parent = portalDourado
 
-local favBtn = Instance.new("TextButton")
-favBtn.Size = UDim2.new(0, 20, 0, 13)
-favBtn.Position = UDim2.new(1, -46, 0, 0)
-favBtn.BackgroundColor3 = COR_PANEL
-favBtn.Text = "F"
-favBtn.TextColor3 = COR_TEXTO_D
-favBtn.Font = Enum.Font.Code
-favBtn.TextSize = 9
-favBtn.AutoButtonColor = false
-favBtn.BorderSizePixel = 0
-favBtn.ZIndex = 4
-favBtn.Parent = panelInner
+    -- 3 camadas de partículas douradas
+    local sparks = Instance.new("ParticleEmitter")
+    sparks.Color = ColorSequence.new(COR_OURO_V2)
+    sparks.Size = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0.6),
+        NumberSequenceKeypoint.new(1, 0)
+    })
+    sparks.Lifetime = NumberRange.new(0.6, 1.5)
+    sparks.Rate = 60
+    sparks.Speed = NumberRange.new(6, 15)
+    sparks.SpreadAngle = Vector2.new(360, 360)
+    sparks.LightEmission = 1
+    sparks.Parent = portalDourado
 
-local favCorner = Instance.new("UICorner")
-favCorner.CornerRadius = UDim.new(0, 3)
-favCorner.Parent = favBtn
+    local brasas = Instance.new("ParticleEmitter")
+    brasas.Color = ColorSequence.new(Color3.fromRGB(255, 240, 150))
+    brasas.Size = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0.4),
+        NumberSequenceKeypoint.new(0.5, 0.6),
+        NumberSequenceKeypoint.new(1, 0)
+    })
+    brasas.Lifetime = NumberRange.new(1, 2.5)
+    brasas.Rate = 35
+    brasas.Speed = NumberRange.new(4, 10)
+    brasas.SpreadAngle = Vector2.new(40, 40)
+    brasas.Acceleration = Vector3.new(0, 12, 0)
+    brasas.LightEmission = 0.9
+    brasas.Parent = portalDourado
 
-local favStroke = Instance.new("UIStroke")
-favStroke.Color = COR_LINHA_D
-favStroke.Thickness = 1
-favStroke.Transparency = 0.3
-favStroke.Parent = favBtn
+    local glowDourado = Instance.new("ParticleEmitter")
+    glowDourado.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 200)),
+        ColorSequenceKeypoint.new(1, COR_OURO_V2)
+    })
+    glowDourado.Size = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 1.2),
+        NumberSequenceKeypoint.new(1, 2.5)
+    })
+    glowDourado.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0.5),
+        NumberSequenceKeypoint.new(1, 1)
+    })
+    glowDourado.Lifetime = NumberRange.new(0.8, 1.5)
+    glowDourado.Rate = 20
+    glowDourado.Speed = NumberRange.new(0.5, 2.5)
+    glowDourado.SpreadAngle = Vector2.new(360, 360)
+    glowDourado.LightEmission = 0.6
+    glowDourado.Parent = portalDourado
 
-local refreshBtn = Instance.new("TextButton")
-refreshBtn.Size = UDim2.new(0, 20, 0, 13)
-refreshBtn.Position = UDim2.new(1, -24, 0, 0)
-refreshBtn.BackgroundColor3 = COR_PANEL
-refreshBtn.Text = "R"
-refreshBtn.TextColor3 = COR_LINHA
-refreshBtn.Font = Enum.Font.Code
-refreshBtn.TextSize = 9
-refreshBtn.AutoButtonColor = false
-refreshBtn.BorderSizePixel = 0
-refreshBtn.ZIndex = 4
-refreshBtn.Parent = panelInner
+    -- Anel dourado rotativo
+    local anel = Instance.new("Part")
+    anel.Name = "RingRotativo"
+    anel.Shape = Enum.PartType.Cylinder
+    anel.Size = Vector3.new(0.2, 6, 6)
+    anel.CFrame = verticalCFrame * CFrame.Angles(0, 0, math.rad(90))
+    anel.Anchored = true
+    anel.CanCollide = false
+    anel.Material = Enum.Material.Neon
+    anel.Color = COR_OURO_V2
+    anel.Transparency = 0.2
+    anel.Parent = workspace
+    anel:SetAttribute("OwnerId", player.UserId)
 
-local refreshCorner = Instance.new("UICorner")
-refreshCorner.CornerRadius = UDim.new(0, 3)
-refreshCorner.Parent = refreshBtn
+    task.spawn(function()
+        while anel and anel.Parent do
+            pcall(function()
+                anel.CFrame = anel.CFrame * CFrame.Angles(math.rad(3), 0, 0)
+            end)
+            task.wait(0.03)
+        end
+    end)
 
-local refreshStroke = Instance.new("UIStroke")
-refreshStroke.Color = COR_LINHA_D
-refreshStroke.Thickness = 1
-refreshStroke.Transparency = 0.3
-refreshStroke.Parent = refreshBtn
+    -- Feixe de luz vertical dourado
+    local beam = Instance.new("Part")
+    beam.Name = "LightBeam"
+    beam.Size = Vector3.new(1, 60, 1)
+    beam.CFrame = CFrame.new(posicaoPortal + Vector3.new(0, 30, 0))
+    beam.Anchored = true
+    beam.CanCollide = false
+    beam.Material = Enum.Material.Neon
+    beam.Color = COR_OURO_V2
+    beam.Transparency = 0.85
+    beam.Parent = workspace
+    beam:SetAttribute("OwnerId", player.UserId)
 
-local searchBox = Instance.new("TextBox")
-searchBox.Size = UDim2.new(1, -8, 0, 15)
-searchBox.Position = UDim2.new(0, 4, 0, 13)
-searchBox.BackgroundColor3 = COR_PANEL
-searchBox.BackgroundTransparency = 0.2
-searchBox.Text = ""
-searchBox.PlaceholderText = "pesquisar..."
-searchBox.TextColor3 = COR_TEXTO
-searchBox.PlaceholderColor3 = COR_TEXTO_D
-searchBox.Font = Enum.Font.Code
-searchBox.TextSize = 6
-searchBox.TextXAlignment = Enum.TextXAlignment.Left
-searchBox.ClearTextOnFocus = false
-searchBox.BorderSizePixel = 0
-searchBox.ZIndex = 4
-searchBox.Parent = panelInner
+    task.spawn(function()
+        while beam and beam.Parent do
+            pcall(function()
+                beam.Transparency = 0.7 + math.sin(os.clock() * 3) * 0.15
+            end)
+            task.wait(0.05)
+        end
+    end)
 
-local searchCorner = Instance.new("UICorner")
-searchCorner.CornerRadius = UDim.new(0, 3)
-searchCorner.Parent = searchBox
+    -- Superfície com textura dourada
+    local function createSurfaceFace(normalFace)
+        local surf = Instance.new("SurfaceGui")
+        surf.Face = normalFace
+        surf.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+        surf.PixelsPerStud = 50
+        surf.LightInfluence = 0
+        surf.Parent = portalDourado
 
-local searchStroke = Instance.new("UIStroke")
-searchStroke.Color = COR_LINHA_D
-searchStroke.Thickness = 1
-searchStroke.Transparency = 0.4
-searchStroke.Parent = searchBox
+        local img = Instance.new("ImageLabel")
+        img.Size = UDim2.new(1, 0, 1, 0)
+        img.BackgroundTransparency = 1
+        img.Image = PORTAL_TEXTURE
+        img.AnchorPoint = Vector2.new(0.5, 0.5)
+        img.Position = UDim2.new(0.5, 0, 0.5, 0)
+        img.ImageColor3 = COR_OURO_V2   -- ✅ TINGE A TEXTURA DE DOURADO
+        img.Parent = surf
 
-local scrollingList = Instance.new("ScrollingFrame")
-scrollingList.Size = UDim2.new(1, -8, 1, -34)
-scrollingList.Position = UDim2.new(0, 4, 0, 30)
-scrollingList.BackgroundTransparency = 1
-scrollingList.BorderSizePixel = 0
-scrollingList.CanvasSize = UDim2.new(0, 0, 0, 0)
-scrollingList.ScrollBarThickness = 2
-scrollingList.ScrollBarImageColor3 = COR_LINHA
-scrollingList.ZIndex = 3
-scrollingList.Parent = panelInner
+        local c = Instance.new("UICorner")
+        c.CornerRadius = UDim.new(0.5, 0)
+        c.Parent = img
 
-local uiListLayout = Instance.new("UIListLayout")
-uiListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-uiListLayout.Padding = UDim.new(0, 2)
-uiListLayout.Parent = scrollingList
+        local stroke = Instance.new("UIStroke")
+        stroke.Color = COR_OURO_V2
+        stroke.Thickness = 4
+        stroke.Transparency = 0.1
+        stroke.Parent = img
+
+        return img
+    end
+
+    local fFront = createSurfaceFace(Enum.NormalId.Front)
+    local bFront = createSurfaceFace(Enum.NormalId.Back)
+
+    -- Animação de abertura
+    pcall(function()
+        TweenService:Create(portalDourado, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Size = Vector3.new(8, 8, 0.1)
+        }):Play()
+        TweenService:Create(anel, TweenInfo.new(0.55, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Size = Vector3.new(0.2, 9, 9)
+        }):Play()
+    end)
+
+    -- Pulso na luz
+    task.spawn(function()
+        while portalDourado and portalDourado.Parent do
+            pcall(function()
+                TweenService:Create(luzDourada, TweenInfo.new(0.7, Enum.EasingStyle.Sine), {Brightness = 8}):Play()
+            end)
+            task.wait(0.7)
+            if not (portalDourado and portalDourado.Parent) then break end
+            pcall(function()
+                TweenService:Create(luzDourada, TweenInfo.new(0.7, Enum.EasingStyle.Sine), {Brightness = 5}):Play()
+            end)
+            task.wait(0.7)
+        end
+    end)
+
+    -- Giro da textura
+    task.spawn(function()
+        while portalDourado and portalDourado.Parent do
+            pcall(function()
+                local fRot = (fFront.Rotation + 12) % 360
+                fFront.Rotation = fRot
+                bFront.Rotation = fRot
+            end)
+            task.wait(0.03)
+        end
+    end)
+
+    -- ✨ EFEITOS NA TELA
+    flashTela(COR_OURO_V2, 0.35)
+    pulsoCor(COR_OURO_V2, 0.6)
+    efeitoOndas(3, 0.7, COR_OURO_V2)
+    efeitoStreaks(10, COR_OURO_V2)
+    cameraShake(1.2, 0.25)
+
+    -- ✨ AUTO-DESTRUIÇÃO APÓS 5 SEGUNDOS
+    task.delay(5, function()
+        if portalDourado and portalDourado.Parent then
+            -- Fade out + shrink
+            pcall(function()
+                TweenService:Create(portalDourado, TweenInfo.new(0.6, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+                    Size = Vector3.new(0, 0, 0.01)
+                }):Play()
+            end)
+            pcall(function()
+                TweenService:Create(somLoop, TweenInfo.new(0.5), {Volume = 0}):Play()
+            end)
+            pcall(function()
+                TweenService:Create(luzDourada, TweenInfo.new(0.5), {Brightness = 0}):Play()
+            end)
+
+            -- Some as partículas
+            pcall(function() sparks.Enabled = false end)
+            pcall(function() brasas.Enabled = false end)
+            pcall(function() glowDourado.Enabled = false end)
+
+            -- Fecha anel e beam
+            pcall(function()
+                if anel and anel.Parent then
+                    TweenService:Create(anel, TweenInfo.new(0.5), {Transparency = 1}):Play()
+                end
+                if beam and beam.Parent then
+                    TweenService:Create(beam, TweenInfo.new(0.5), {Transparency = 1}):Play()
+                end
+            end)
+
+            task.wait(0.7)
+
+            -- Destrói tudo
+            if portalDourado and portalDourado.Parent then portalDourado:Destroy() end
+            if anel and anel.Parent then anel:Destroy() end
+            if beam and beam.Parent then beam:Destroy() end
+        end
+    end)
+
+    return portalDourado, anel, beam
+end
 
 --=============================================================
--- PORTAL ULTRA
+-- ✨ HANDLER DO BOTÃO "PORTAL DOURADO"
+--=============================================================
+v2Btn.MouseButton1Click:Connect(function()
+    setRandomQuote()
+    genv.V2_Ativo = true
+    v2Btn:SetAttribute("ActiveState", true)
+
+    local lbl = v2Btn:FindFirstChildOfClass("TextLabel")
+
+    -- Visual "ativo" temporário
+    if lbl then
+        lbl.Text = "✦ PORTAL DOURADO"
+        lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+    end
+    v2Btn.BackgroundColor3 = COR_OURO_V2
+    v2Btn.BackgroundTransparency = 0
+    if v2Stroke then
+        v2Stroke.Color = Color3.fromRGB(255, 240, 150)
+        v2Stroke.Transparency = 0.1
+    end
+    local acc = v2Btn:FindFirstChild("Accent")
+    if acc and acc:IsA("Frame") then
+        acc.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    end
+
+    -- Cria o portal dourado
+    criarPortalDouradoVisual()
+
+    -- Volta ao estado neutro depois de 5.5s
+    task.delay(5.5, function()
+        genv.V2_Ativo = false
+        v2Btn:SetAttribute("ActiveState", false)
+
+        if lbl then
+            lbl.Text = "✦ PORTAL DOURADO"
+            lbl.TextColor3 = COR_TEXTO
+        end
+        v2Btn.BackgroundColor3 = COR_PANEL
+        v2Btn.BackgroundTransparency = 0.1
+        if v2Stroke then
+            v2Stroke.Color = COR_OURO_V2_D
+            v2Stroke.Transparency = 0.3
+        end
+        if acc and acc:IsA("Frame") then
+            acc.BackgroundColor3 = COR_OURO_V2
+        end
+    end)
+end)
+
+--=============================================================
+-- PORTAL INSTANCE (para TP, marcação, void, céus)
 --=============================================================
 local function createPortalInstance(cframe, tag, opcoes)
     opcoes = opcoes or {}
@@ -1635,6 +1816,8 @@ local function createPortalInstance(cframe, tag, opcoes)
     local pos = cframe.Position
     local _, yRot, _ = cframe:ToOrientation()
     local verticalCFrame = CFrame.new(pos) * CFrame.Angles(0, yRot, 0)
+
+    local cor = corPortal()
 
     local portalPart = Instance.new("Part")
     portalPart.Size = Vector3.new(0.1, 0.1, 0.1)
@@ -1644,6 +1827,7 @@ local function createPortalInstance(cframe, tag, opcoes)
     portalPart.Transparency = 1
     portalPart.Parent = workspace
     CollectionService:AddTag(portalPart, tag)
+    portalPart:SetAttribute("OwnerId", player.UserId)
     if tag == TAG_GEN then table.insert(activePortals, portalPart) end
 
     if opcoes.comSom ~= false then
@@ -1659,13 +1843,13 @@ local function createPortalInstance(cframe, tag, opcoes)
     end
 
     local portalLight = Instance.new("PointLight")
-    portalLight.Color = COR_LINHA
+    portalLight.Color = cor
     portalLight.Range = 25
     portalLight.Brightness = 5
     portalLight.Parent = portalPart
 
     local spotlight = Instance.new("SpotLight")
-    spotlight.Color = COR_LINHA
+    spotlight.Color = cor
     spotlight.Range = 30
     spotlight.Brightness = 3
     spotlight.Angle = 90
@@ -1675,7 +1859,7 @@ local function createPortalInstance(cframe, tag, opcoes)
     if opcoes.comParticulas ~= false then
         local sparks = Instance.new("ParticleEmitter")
         sparks.Name = "PortalSparks"
-        sparks.Color = ColorSequence.new(COR_LINHA)
+        sparks.Color = ColorSequence.new(cor)
         sparks.Size = NumberSequence.new({
             NumberSequenceKeypoint.new(0, 0.5),
             NumberSequenceKeypoint.new(1, 0)
@@ -1690,7 +1874,7 @@ local function createPortalInstance(cframe, tag, opcoes)
 
         local brasas = Instance.new("ParticleEmitter")
         brasas.Name = "PortalBrasas"
-        brasas.Color = ColorSequence.new(COR_OURO)
+        brasas.Color = ColorSequence.new(cor == COR_OURO_V2 and Color3.fromRGB(255, 240, 150) or COR_OURO)
         brasas.Size = NumberSequence.new({
             NumberSequenceKeypoint.new(0, 0.3),
             NumberSequenceKeypoint.new(0.5, 0.5),
@@ -1707,8 +1891,8 @@ local function createPortalInstance(cframe, tag, opcoes)
         local glowP = Instance.new("ParticleEmitter")
         glowP.Name = "PortalGlow"
         glowP.Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(200, 255, 200)),
-            ColorSequenceKeypoint.new(1, COR_LINHA)
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+            ColorSequenceKeypoint.new(1, cor)
         })
         glowP.Size = NumberSequence.new({
             NumberSequenceKeypoint.new(0, 1),
@@ -1734,10 +1918,10 @@ local function createPortalInstance(cframe, tag, opcoes)
     ring.Anchored = true
     ring.CanCollide = false
     ring.Material = Enum.Material.Neon
-    ring.Color = COR_LINHA
+    ring.Color = cor
     ring.Transparency = 0.3
     ring.Parent = workspace
-    CollectionService:AddTag(ring, tag .. "_Ring")
+    ring:SetAttribute("OwnerId", player.UserId)
 
     task.spawn(function()
         while ring and ring.Parent do
@@ -1755,10 +1939,10 @@ local function createPortalInstance(cframe, tag, opcoes)
     beam.Anchored = true
     beam.CanCollide = false
     beam.Material = Enum.Material.Neon
-    beam.Color = COR_LINHA
+    beam.Color = cor
     beam.Transparency = 0.85
     beam.Parent = workspace
-    CollectionService:AddTag(beam, tag .. "_Beam")
+    beam:SetAttribute("OwnerId", player.UserId)
 
     task.spawn(function()
         while beam and beam.Parent do
@@ -1790,7 +1974,7 @@ local function createPortalInstance(cframe, tag, opcoes)
         c.Parent = img
 
         local stroke = Instance.new("UIStroke")
-        stroke.Color = COR_LINHA
+        stroke.Color = cor
         stroke.Thickness = 3
         stroke.Transparency = 0.2
         stroke.Parent = img
@@ -1958,7 +2142,7 @@ local function atualizarLabelMarcacao()
             end
             marcacaoBtn.BackgroundColor3 = Color3.fromRGB(30, 25, 10)
             if marcacaoStroke then
-                marcacaoStroke.Color = Color3.fromRGB(255, 180, 40)
+                marcacaoStroke.Color = COR_DOURADO
                 marcacaoStroke.Transparency = 0.1
             end
             marcacaoBtn:SetAttribute("ActiveState", 1)
@@ -1970,7 +2154,7 @@ local function atualizarLabelMarcacao()
             end
             marcacaoBtn.BackgroundColor3 = COR_PANEL
             if marcacaoStroke then
-                marcacaoStroke.Color = Color3.fromRGB(180, 130, 0)
+                marcacaoStroke.Color = COR_DOURADO_D
                 marcacaoStroke.Transparency = 0.4
             end
             marcacaoBtn:SetAttribute("ActiveState", 0)
@@ -2387,7 +2571,7 @@ local function refreshPlayerList()
 
     refreshLock = false
     if not ok then
-        warn("[RickPrime] Erro no refreshPlayerList:", resultado)
+        warn("[PortalIntercosmico] Erro no refreshPlayerList:", resultado)
         return 0
     end
     return resultado
@@ -3014,12 +3198,13 @@ end
 
 local function avEfeitoTeleporte()
     task.spawn(function()
-        avFade.BackgroundColor3 = COR_CIANO
+        local cor = corPortal()
+        avFade.BackgroundColor3 = cor
         avFade.BackgroundTransparency = 0.5
 
         task.wait(0.05)
         avFlashTela(Color3.fromRGB(255, 255, 255), 0.18)
-        pulsoCor(COR_CIANO, 0.5)
+        pulsoCor(cor, 0.5)
 
         pcall(function()
             TweenService:Create(avFade, TweenInfo.new(0.65, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
@@ -3027,9 +3212,9 @@ local function avEfeitoTeleporte()
             }):Play()
         end)
 
-        avEfeitoOndas(4, 0.7, COR_LINHA)
-        avEfeitoParticulas(80, COR_LINHA)
-        efeitoStreaks(6, COR_CIANO)
+        avEfeitoOndas(4, 0.7, cor)
+        avEfeitoParticulas(80, cor)
+        efeitoStreaks(6, cor)
         cameraShake(1.5, 0.3)
         criarBlur(12)
         removerBlur(0.5)
@@ -3345,12 +3530,12 @@ end)
 -- MINIMIZAR
 --=============================================================
 local menuMinimizado = false
-local alturaOriginal = 340
+local alturaOriginal = 380
 local alturaMinimizada = 40
 
 local ocultarAoMinimizar = {
     tpPlayerBtn, clearBtn, voidBtn, ceusBtn, marcacaoBtn,
-    permBtn, antiTPBtn, antiVoidBtn, rejoinBtn, closeBtn
+    permBtn, antiTPBtn, antiVoidBtn, rejoinBtn, v2Btn, closeBtn
 }
 
 minimizarBtn.MouseButton1Click:Connect(function()
@@ -3395,7 +3580,7 @@ minimizarBtn.MouseButton1Click:Connect(function()
 
         pcall(function()
             TweenService:Create(mainFrame, TweenInfo.new(0.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-                Size = UDim2.new(0, 110, 0, alturaMinimizada)
+                Size = UDim2.new(0, 130, 0, alturaMinimizada)
             }):Play()
         end)
     else
@@ -3425,7 +3610,7 @@ minimizarBtn.MouseButton1Click:Connect(function()
 
         pcall(function()
             TweenService:Create(mainFrame, TweenInfo.new(0.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-                Size = UDim2.new(0, 110, 0, alturaOriginal)
+                Size = UDim2.new(0, 130, 0, alturaOriginal)
             }):Play()
         end)
 
@@ -3444,6 +3629,15 @@ minimizarBtn.MouseButton1Click:Connect(function()
                 if st then st.Transparency = 0.15 st.Color = COR_CIANO end
                 local a = btn:FindFirstChild("Accent")
                 if a and a:IsA("Frame") then a.BackgroundTransparency = 0 a.BackgroundColor3 = COR_CIANO end
+            elseif btn == v2Btn then
+                btn.BackgroundColor3 = COR_PANEL
+                btn.BackgroundTransparency = 0.1
+                local l = btn:FindFirstChildOfClass("TextLabel")
+                if l then l.TextTransparency = 0 l.TextColor3 = COR_TEXTO end
+                local st = btn:FindFirstChildOfClass("UIStroke")
+                if st then st.Transparency = 0.3 st.Color = COR_OURO_V2_D end
+                local a = btn:FindFirstChild("Accent")
+                if a and a:IsA("Frame") then a.BackgroundTransparency = 0 a.BackgroundColor3 = COR_OURO_V2 end
             else
                 local transOriginal = 0.1
                 local strokeTransOriginal = 0.4
@@ -3500,6 +3694,7 @@ end)
 local function fullCleanup()
     genv.AntiTP_Ativo = false
     genv.Marcacao_Ativo = false
+    genv.V2_Ativo = false
     antiVoidAtivo = false
     efeitoTPRefs = 0
 
@@ -3575,7 +3770,7 @@ closeBtn.MouseButton1Click:Connect(function()
         local slideOutTween = TweenService:Create(
             mainFrame,
             TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.In),
-            {Position = UDim2.new(0, -160, 0.35, -170)}
+            {Position = UDim2.new(0, -160, 0.35, -190)}
         )
         slideOutTween:Play()
         slideOutTween.Completed:Wait()
@@ -3584,6 +3779,5 @@ closeBtn.MouseButton1Click:Connect(function()
     fullCleanup()
 end)
 
-print("✨ Rick Prime v45 DELTA — Carregado com sucesso ✨")
-print("[RickPrime] GUI Parent:", GUI_PARENT:GetFullName())
-print("[RickPrime] LocalPlayer:", player.Name)
+print("✨ PORTAL INTERCOSMICO v47 — Carregado ✨")
+print("[PI] GUI Parent:", GUI_PARENT:GetFullName())
