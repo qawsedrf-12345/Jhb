@@ -1,8 +1,9 @@
 --=============================================================
--- RICK PRIME — Portal GUI + Marcação + Anti-TP + PERM (v40)
+-- RICK PRIME — Portal GUI + Marcação + Anti-TP + PERM (v39)
 -- Estilo Tech / HUD Sci-Fi — Sistema de Favoritos ♾
--- + FIX: filtro persistente, panelTween, debounce, órfãos
--- + NOVO: Botão RANDOM dentro do menu de players
+-- + FIX: Player menu (coração de amigo, hover, refresh, órfãos)
+-- + FIX: fecharPlayerPanel sempre fecha
+-- + FIX: count direto da GUI (não depende de refreshPlayerList)
 --=============================================================
 local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
@@ -64,7 +65,6 @@ local TAG_M2    = "RP_M2_"    .. player.UserId
 local TAG_VOID  = "RP_Void_"  .. player.UserId
 local TAG_RET   = "RP_Ret_"   .. player.UserId
 local TAG_SAIDA = "RP_Saida_" .. player.UserId
-local TAG_RAND  = "RP_Rand_"  .. player.UserId
 
 local activePortals = {}
 local marcacaoP1, marcacaoP2 = nil, nil
@@ -86,8 +86,6 @@ local COR_GLOW     = Color3.fromRGB(0, 255, 130)
 local COR_DOURADO  = Color3.fromRGB(255, 200, 50)
 local COR_DOURADO_D = Color3.fromRGB(180, 140, 30)
 local COR_PRETO    = Color3.fromRGB(0, 0, 0)
-local COR_ROXO     = Color3.fromRGB(180, 80, 255)
-local COR_ROXO_D   = Color3.fromRGB(120, 50, 180)
 
 --=============================================================
 -- ANTI-TP
@@ -474,7 +472,7 @@ local function wipeAllPortals(comEfeito)
     return total
 end
 
-for _, tag in ipairs({TAG_GEN, TAG_M1, TAG_M2, TAG_VOID, TAG_RET, TAG_SAIDA, TAG_RAND}) do
+for _, tag in ipairs({TAG_GEN, TAG_M1, TAG_M2, TAG_VOID, TAG_RET, TAG_SAIDA}) do
     for _, p in ipairs(CollectionService:GetTagged(tag)) do
         if p then p:Destroy() end
     end
@@ -763,99 +761,6 @@ local function monitorarSaidaDoCeu()
 end
 
 --=============================================================
--- 🎲 RANDOM (busca ponto aleatório com chão)
---=============================================================
-local randomLocalTP = nil
-
-local function criarRandomLocalTP(posicao)
-    if randomLocalTP and randomLocalTP.Parent then return end
-    local p = Instance.new("Part")
-    p.Name = "RickLocalTP_Random"
-    p.Size = Vector3.new(4, 1, 4)
-    p.Position = posicao
-    p.Anchored = true
-    p.CanCollide = false
-    p.CanTouch = false
-    p.CanQuery = false
-    p.Transparency = 1
-    p.Parent = workspace
-    randomLocalTP = p
-end
-
-local function deletarRandomLocalTP()
-    if randomLocalTP and randomLocalTP.Parent then randomLocalTP:Destroy() end
-    randomLocalTP = nil
-end
-
-local function buscarPontoAleatorioComChao(posicaoOrigem)
-    local char = player.Character
-    if not char then return nil end
-
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return nil end
-
-    local ignorar = { char }
-    if voidPlaceFolder then table.insert(ignorar, voidPlaceFolder) end
-    if ceuPlaceFolder then table.insert(ignorar, ceuPlaceFolder) end
-    if randomLocalTP then table.insert(ignorar, randomLocalTP) end
-    if localTP then table.insert(ignorar, localTP) end
-
-    local params = RaycastParams.new()
-    params.FilterType = Enum.RaycastFilterType.Exclude
-    params.FilterDescendantsInstances = ignorar
-    params.IgnoreWater = false
-
-    local MAX_TENTATIVAS = 40
-    local DIST_MIN = 500
-    local DIST_MAX = 3000
-    local ALTURA_ORIGEM = 300
-    local ALTURA_BAIXO = 2000
-
-    local melhorPonto = nil
-    local melhorDistancia = 0
-
-    for _ = 1, MAX_TENTATIVAS do
-        local angulo = math.random() * math.pi * 2
-        local distancia = math.random(DIST_MIN, DIST_MAX)
-
-        local xAlvo = posicaoOrigem.X + math.cos(angulo) * distancia
-        local zAlvo = posicaoOrigem.Z + math.sin(angulo) * distancia
-
-        local origem = Vector3.new(xAlvo, posicaoOrigem.Y + ALTURA_ORIGEM, zAlvo)
-        local direcao = Vector3.new(0, -(ALTURA_ORIGEM + ALTURA_BAIXO), 0)
-
-        local resultado = workspace:Raycast(origem, direcao, params)
-
-        if resultado then
-            local dot = resultado.Normal:Dot(Vector3.new(0, 1, 0))
-            if dot >= 0.7 then
-                local yResult = resultado.Position.Y
-                local seguro = true
-
-                if yResult < -400 and yResult > -600 then
-                    seguro = false
-                elseif yResult > 4900 and yResult < 5100 then
-                    seguro = false
-                end
-
-                if seguro then
-                    local distReal = (resultado.Position - posicaoOrigem).Magnitude
-                    if distReal > melhorDistancia then
-                        melhorPonto = resultado.Position
-                        melhorDistancia = distReal
-                    end
-                    if distReal >= 2500 then
-                        return resultado.Position
-                    end
-                end
-            end
-        end
-    end
-
-    return melhorPonto
-end
-
---=============================================================
 -- UI SETUP
 --=============================================================
 local screenGui = Instance.new("ScreenGui")
@@ -943,7 +848,7 @@ local titleTag = Instance.new("TextLabel")
 titleTag.Size = UDim2.new(1, -10, 0, 8)
 titleTag.Position = UDim2.new(0, 5, 0, 5)
 titleTag.BackgroundTransparency = 1
-titleTag.Text = "▰ PRIME OS // v40.0"
+titleTag.Text = "▰ PRIME OS // v39.0"
 titleTag.TextColor3 = COR_CIANO
 titleTag.Font = Enum.Font.Code
 titleTag.TextSize = 6
@@ -1067,6 +972,7 @@ local function createButton(text, yPos, iconeCor, semHover)
     lbl.ZIndex = 5
     lbl.Parent = btn
 
+    -- ✅ FIX: só adiciona hover padrão se NÃO for botão especial
     if not semHover then
         btn.MouseEnter:Connect(function()
             if not btn:GetAttribute("ActiveState") then
@@ -1096,7 +1002,7 @@ end
 local tpPlayerBtn  = createButton("▸ SELECT TARGET", 44, COR_LINHA)
 local clearBtn     = createButton("▸ CLEAR PORTALS", 62, COR_CIANO)
 local voidBtn      = createButton("▸ VOID DIMENSION", 80, COR_VERMELHO)
-local ceusBtn      = createButton("▸ CÉUS", 98, COR_CIANO, true)
+local ceusBtn      = createButton("▸ CÉUS", 98, COR_CIANO, true)  -- ✅ semHover
 local marcacaoBtn  = createButton("▸ MARCAÇÃO [0/2]", 116, Color3.fromRGB(255, 180, 40))
 local permBtn      = createButton("▸ POSIÇÃO PERM [OFF]", 134, COR_DOURADO)
 local antiTPBtn    = createButton("▸ ANTI-TP [OFF]", 152, COR_VERMELHO)
@@ -1155,6 +1061,7 @@ if rejoinStroke then
     rejoinStroke.Transparency = 0.4
 end
 
+-- ✅ Visual do botão CÉUS (fundo preto, letras ciano)
 ceusBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 ceusBtn.BackgroundTransparency = 0
 
@@ -1173,6 +1080,7 @@ if ceusAccent and ceusAccent:IsA("Frame") then
     ceusAccent.BackgroundColor3 = COR_CIANO
 end
 
+-- ✅ Hover específico do CÉUS (substitui o genérico, não soma)
 ceusBtn.MouseEnter:Connect(function()
     ceusBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 end)
@@ -1225,9 +1133,8 @@ local pInnerCorner = Instance.new("UICorner")
 pInnerCorner.CornerRadius = UDim.new(0, 2)
 pInnerCorner.Parent = panelInner
 
--- ✅ Título reduzido pra dar espaço pro botão RANDOM
 local panelTitle = Instance.new("TextLabel")
-panelTitle.Size = UDim2.new(1, -74, 0, 13)   -- era -54
+panelTitle.Size = UDim2.new(1, -54, 0, 13)
 panelTitle.BackgroundTransparency = 1
 panelTitle.Text = "▰ TARGETS"
 panelTitle.TextColor3 = COR_LINHA
@@ -1237,31 +1144,6 @@ panelTitle.TextXAlignment = Enum.TextXAlignment.Left
 panelTitle.Position = UDim2.new(0, 4, 0, 0)
 panelTitle.ZIndex = 4
 panelTitle.Parent = panelInner
-
--- 🎲 BOTÃO RANDOM (dentro do menu de players)
-local randomBtn = Instance.new("TextButton")
-randomBtn.Name = "RandomBtn"
-randomBtn.Size = UDim2.new(0, 24, 0, 13)
-randomBtn.Position = UDim2.new(1, -68, 0, 0)   -- ao lado do título, antes do ♾
-randomBtn.BackgroundColor3 = COR_PANEL
-randomBtn.Text = "🎲"
-randomBtn.TextColor3 = COR_ROXO
-randomBtn.Font = Enum.Font.GothamBold
-randomBtn.TextSize = 10
-randomBtn.AutoButtonColor = false
-randomBtn.BorderSizePixel = 0
-randomBtn.ZIndex = 4
-randomBtn.Parent = panelInner
-
-local randomCorner = Instance.new("UICorner")
-randomCorner.CornerRadius = UDim.new(0, 2)
-randomCorner.Parent = randomBtn
-
-local randomStroke = Instance.new("UIStroke")
-randomStroke.Color = COR_ROXO_D
-randomStroke.Thickness = 1
-randomStroke.Transparency = 0.3
-randomStroke.Parent = randomBtn
 
 -- ♾ BOTÃO FAVORITOS
 local favBtn = Instance.new("TextButton")
@@ -1312,19 +1194,6 @@ refreshStroke.Color = COR_LINHA_D
 refreshStroke.Thickness = 1
 refreshStroke.Transparency = 0.3
 refreshStroke.Parent = refreshBtn
-
--- ✅ Hover do RANDOM
-randomBtn.MouseEnter:Connect(function()
-    randomBtn.BackgroundColor3 = Color3.fromRGB(30, 20, 45)
-    randomStroke.Color = COR_ROXO
-    randomStroke.Transparency = 0.1
-end)
-
-randomBtn.MouseLeave:Connect(function()
-    randomBtn.BackgroundColor3 = COR_PANEL
-    randomStroke.Color = COR_ROXO_D
-    randomStroke.Transparency = 0.3
-end)
 
 refreshBtn.MouseEnter:Connect(function()
     refreshBtn.BackgroundColor3 = Color3.fromRGB(20, 30, 24)
@@ -1418,9 +1287,6 @@ local favoritos = {}
 
 local permanenciaAtiva = false
 local marcacaoP1Perm = nil
-
--- ✅ FIX BUG 2: guarda referência do tween do painel
-local panelTween = nil
 
 --=============================================================
 -- PORTAL INSTANCE
@@ -1560,13 +1426,11 @@ local function abrirPortalVoid()
     wipeAllPortals(true)
     panelOpen = false
     tpPlayerBtn:SetAttribute("ActiveState", false)
-    if panelTween then panelTween:Cancel() end
-    panelTween = TweenService:Create(
+    TweenService:Create(
         slidingPanel,
         TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
         { Size = UDim2.new(0, 0, 1, 0) }
-    )
-    panelTween:Play()
+    ):Play()
     tpPlayerBtn.BackgroundColor3 = COR_PANEL
     local tpLbl = tpPlayerBtn:FindFirstChildOfClass("TextLabel")
     if tpLbl then tpLbl.TextColor3 = COR_TEXTO end
@@ -1663,13 +1527,11 @@ local function abrirPortalCeu()
     wipeAllPortals(true)
     panelOpen = false
     tpPlayerBtn:SetAttribute("ActiveState", false)
-    if panelTween then panelTween:Cancel() end
-    panelTween = TweenService:Create(
+    TweenService:Create(
         slidingPanel,
         TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
         { Size = UDim2.new(0, 0, 1, 0) }
-    )
-    panelTween:Play()
+    ):Play()
     tpPlayerBtn.BackgroundColor3 = COR_PANEL
     local tpLbl = tpPlayerBtn:FindFirstChildOfClass("TextLabel")
     if tpLbl then tpLbl.TextColor3 = COR_TEXTO end
@@ -1762,103 +1624,7 @@ local function abrirPortalCeu()
 end
 
 --=============================================================
--- 🎲 RANDOM (abre)
---=============================================================
-local function abrirPortalRandom()
-    setRandomQuote()
-    wipeAllPortals(true)
-    panelOpen = false
-    tpPlayerBtn:SetAttribute("ActiveState", false)
-    if panelTween then panelTween:Cancel() end
-    panelTween = TweenService:Create(
-        slidingPanel,
-        TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
-        { Size = UDim2.new(0, 0, 1, 0) }
-    )
-    panelTween:Play()
-    tpPlayerBtn.BackgroundColor3 = COR_PANEL
-    local tpLbl = tpPlayerBtn:FindFirstChildOfClass("TextLabel")
-    if tpLbl then tpLbl.TextColor3 = COR_TEXTO end
-
-    local char = player.Character
-    local root = char and char:FindFirstChild("HumanoidRootPart")
-    if not root then return end
-
-    -- ✅ Feedback visual no botão do menu
-    randomBtn.Text = "⏳"
-    randomBtn.TextColor3 = COR_ROXO
-
-    deletarRandomLocalTP()
-    criarRandomLocalTP(root.Position)
-
-    -- ✅ Busca em paralelo (não trava a GUI)
-    local pontoAleatorio = nil
-    task.spawn(function()
-        pontoAleatorio = buscarPontoAleatorioComChao(root.Position)
-    end)
-
-    local timeout = tick() + 2
-    while not pontoAleatorio and tick() < timeout do
-        task.wait(0.05)
-    end
-
-    randomBtn.Text = "🎲"
-    randomBtn.TextColor3 = COR_ROXO
-
-    if not pontoAleatorio then
-        local spawnLocal = workspace:FindFirstChildOfClass("SpawnLocation")
-        if spawnLocal then
-            pontoAleatorio = spawnLocal.Position
-        else
-            randomBtn.Text = "❌"
-            task.wait(1.5)
-            randomBtn.Text = "🎲"
-            return
-        end
-    end
-
-    local portalEntrada = createPortalInstance(root.CFrame * CFrame.new(0, 0, -5), TAG_RAND)
-    if tpLbl then tpLbl.Text = "▸ RANDOM PORTAL" end
-
-    local resetAtivo = true
-    task.delay(15, function()
-        if resetAtivo and portalEntrada and portalEntrada.Parent then
-            if tpLbl then tpLbl.Text = "▸ SELECT TARGET" end
-            fecharPortal(portalEntrada)
-        end
-    end)
-
-    local touched = false
-    portalEntrada.Touched:Connect(function(hit)
-        if touched or hit.Parent ~= char then return end
-        touched = true
-        resetAtivo = false
-        if tpLbl then tpLbl.Text = "▸ VIAJANDO..." end
-
-        playTPSound()
-        playRandomTPSound()
-        efeitoTP()
-
-        task.delay(0.1, function()
-            if portalEntrada and portalEntrada.Parent then
-                fecharPortal(portalEntrada)
-            end
-        end)
-
-        task.delay(0.2, function()
-            local currentChar = player.Character
-            local currentRoot = currentChar and currentChar:FindFirstChild("HumanoidRootPart")
-            if not currentRoot then return end
-
-            currentRoot.CFrame = CFrame.new(pontoAleatorio + Vector3.new(0, 5, 0))
-
-            if tpLbl then tpLbl.Text = "▸ SELECT TARGET" end
-        end)
-    end)
-end
-
---=============================================================
--- ✅ MARCAÇÃO v40
+-- ✅ MARCAÇÃO v39
 --=============================================================
 local function atualizarLabelMarcacao()
     local lbl = marcacaoBtn:FindFirstChildOfClass("TextLabel")
@@ -2056,6 +1822,7 @@ end
 -- PLAYER LIST
 --=============================================================
 
+-- ✅ FIX: atualizarVisibilidade robusto
 local function atualizarVisibilidade()
     local btns = {}
     for _, child in ipairs(scrollingList:GetChildren()) do
@@ -2089,6 +1856,7 @@ local function atualizarVisibilidade()
     return #btns
 end
 
+-- ✅ FIX: criarBotaoPlayer com coração de amigo correto + hover respeita estado
 local function criarBotaoPlayer(p, layoutOrder)
     local pBtn = Instance.new("TextButton")
     pBtn.Size = UDim2.new(1, 0, 0, 17)
@@ -2134,9 +1902,11 @@ local function criarBotaoPlayer(p, layoutOrder)
     lbl.ZIndex = 4
     lbl.Parent = pBtn
 
+    -- ✅ FIX: verifica amizade UMA vez e guarda
     local isFriend = false
     pcall(function() isFriend = player:IsFriendsWith(p.UserId) end)
 
+    -- ✅ FIX: atualizarVisual respeita amizade em todos os estados
     local function atualizarVisual()
         if favoritos[p.UserId] then
             lbl.Text = "♾ " .. p.DisplayName
@@ -2174,6 +1944,7 @@ local function criarBotaoPlayer(p, layoutOrder)
         end
     end)
 
+    -- ✅ FIX: hover leave restaura cor correta (amigo ou normal)
     pBtn.MouseLeave:Connect(function()
         if not favoritos[p.UserId] then
             if isFriend then
@@ -2211,13 +1982,11 @@ local function criarBotaoPlayer(p, layoutOrder)
         wipeAllPortals(true)
         panelOpen = false
         tpPlayerBtn:SetAttribute("ActiveState", false)
-        if panelTween then panelTween:Cancel() end
-        panelTween = TweenService:Create(
+        TweenService:Create(
             slidingPanel,
             TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
             { Size = UDim2.new(0, 0, 1, 0) }
-        )
-        panelTween:Play()
+        ):Play()
         tpPlayerBtn.BackgroundColor3 = COR_PANEL
         local tpLbl = tpPlayerBtn:FindFirstChildOfClass("TextLabel")
         if tpLbl then tpLbl.TextColor3 = COR_TEXTO end
@@ -2315,7 +2084,9 @@ local function criarBotaoPlayer(p, layoutOrder)
     return pBtn
 end
 
+-- ✅ FIX: refreshPlayerList robusto (limpa órfãos + recria)
 local function refreshPlayerList()
+    -- 1. Remove botões órfãos da GUI (não estão em playerBtns ou apontam pra outro)
     for _, child in ipairs(scrollingList:GetChildren()) do
         if child:IsA("TextButton") then
             local uid = child:GetAttribute("UserId")
@@ -2325,12 +2096,14 @@ local function refreshPlayerList()
         end
     end
 
+    -- 2. Remove refs mortas
     for userId, btn in pairs(playerBtns) do
         if not btn or not btn.Parent then
             playerBtns[userId] = nil
         end
     end
 
+    -- 3. Remove jogadores que saíram
     for userId, btn in pairs(playerBtns) do
         local jogador = Players:GetPlayerByUserId(userId)
         if not jogador or jogador == player then
@@ -2339,6 +2112,7 @@ local function refreshPlayerList()
         end
     end
 
+    -- 4. Cria botões pros que faltam
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= player then
             if not playerBtns[p.UserId] then
@@ -2347,11 +2121,13 @@ local function refreshPlayerList()
         end
     end
 
+    -- 5. Recalcula visibilidade
     local count = atualizarVisibilidade()
     scrollingList.CanvasSize = UDim2.new(0, 0, 0, count * 19)
     return count
 end
 
+-- ✅ Helper: conta botões visíveis direto na GUI (mais confiável)
 local function contarPlayersVisiveis()
     local count = 0
     for _, child in ipairs(scrollingList:GetChildren()) do
@@ -2394,11 +2170,6 @@ refreshBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- ✅ NOVO: botão RANDOM (dentro do menu de players)
-randomBtn.MouseButton1Click:Connect(function()
-    abrirPortalRandom()
-end)
-
 favBtn.MouseButton1Click:Connect(function()
     modoFavorito = not modoFavorito
 
@@ -2423,15 +2194,14 @@ end)
 -- BUTTONS
 --=============================================================
 
--- ✅ FIX BUG 1: limpa filtro antes de abrir
+-- ✅ FIX: conta direto na GUI, não depende de refreshPlayerList
 tpPlayerBtn.MouseButton1Click:Connect(function()
     setRandomQuote()
 
-    -- ✅ FIX: limpa filtro antigo
-    filtroAtivo = ""
-    if searchBox then searchBox.Text = "" end
-
+    -- ✅ FIX: refresh robusto
     refreshPlayerList()
+
+    -- ✅ FIX: conta direto na GUI (não confia no return)
     local otherCount = contarPlayersVisiveis()
 
     if otherCount == 0 then
@@ -2442,13 +2212,11 @@ tpPlayerBtn.MouseButton1Click:Connect(function()
         if panelOpen then
             panelOpen = false
             tpPlayerBtn:SetAttribute("ActiveState", false)
-            if panelTween then panelTween:Cancel() end
-            panelTween = TweenService:Create(
+            TweenService:Create(
                 slidingPanel,
                 TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
                 { Size = UDim2.new(0, 0, 1, 0) }
-            )
-            panelTween:Play()
+            ):Play()
             tpPlayerBtn.BackgroundColor3 = COR_PANEL
         end
         return
@@ -2456,37 +2224,30 @@ tpPlayerBtn.MouseButton1Click:Connect(function()
 
     panelOpen = not panelOpen
     local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-
-    if panelTween then panelTween:Cancel() end
-
     if panelOpen then
         tpPlayerBtn:SetAttribute("ActiveState", true)
-        panelTween = TweenService:Create(slidingPanel, tweenInfo, { Size = UDim2.new(0, 90, 1, 0) })
-        panelTween:Play()
+        TweenService:Create(slidingPanel, tweenInfo, { Size = UDim2.new(0, 72, 1, 0) }):Play()
         tpPlayerBtn.BackgroundColor3 = Color3.fromRGB(20, 40, 25)
 
+        -- ✅ FIX: força refresh do CanvasSize após abrir
         task.defer(function()
             local count = atualizarVisibilidade()
             scrollingList.CanvasSize = UDim2.new(0, 0, 0, count * 19)
         end)
     else
         tpPlayerBtn:SetAttribute("ActiveState", false)
-        panelTween = TweenService:Create(slidingPanel, tweenInfo, { Size = UDim2.new(0, 0, 1, 0) })
-        panelTween:Play()
+        TweenService:Create(slidingPanel, tweenInfo, { Size = UDim2.new(0, 0, 1, 0) }):Play()
         tpPlayerBtn.BackgroundColor3 = COR_PANEL
     end
 end)
 
--- ✅ FIX BUG 5: debounce no PlayerAdded
-local refreshAgendado = false
-
+-- ✅ FIX: PlayerAdded sem task.wait e com dupla passada
 Players.PlayerAdded:Connect(function(p)
-    if panelOpen and not refreshAgendado then
-        refreshAgendado = true
+    if panelOpen then
         refreshPlayerList()
 
+        -- Segunda passada pra pegar amizade
         task.delay(0.5, function()
-            refreshAgendado = false
             if panelOpen then
                 refreshPlayerList()
             end
@@ -2494,15 +2255,15 @@ Players.PlayerAdded:Connect(function(p)
     end
 end)
 
+-- ✅ FIX: PlayerRemoving limpa órfãos também
 Players.PlayerRemoving:Connect(function(p)
-    if not p then return end
-
     local btn = playerBtns[p.UserId]
     if btn and btn.Parent then
         btn:Destroy()
     end
     playerBtns[p.UserId] = nil
 
+    -- ✅ FIX: garante que não sobrou botão órfão
     for _, filho in ipairs(scrollingList:GetChildren()) do
         if filho:IsA("TextButton") and filho:GetAttribute("UserId") == p.UserId then
             filho:Destroy()
@@ -2515,13 +2276,11 @@ Players.PlayerRemoving:Connect(function(p)
     if panelOpen and count == 0 then
         panelOpen = false
         tpPlayerBtn:SetAttribute("ActiveState", false)
-        if panelTween then panelTween:Cancel() end
-        panelTween = TweenService:Create(
+        TweenService:Create(
             slidingPanel,
             TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
             { Size = UDim2.new(0, 0, 1, 0) }
-        )
-        panelTween:Play()
+        ):Play()
         tpPlayerBtn.BackgroundColor3 = COR_PANEL
     end
 end)
@@ -2531,7 +2290,7 @@ ceusBtn.MouseButton1Click:Connect(abrirPortalCeu)
 marcacaoBtn.MouseButton1Click:Connect(clicarMarcacao)
 
 --=============================================================
--- ✅ PERM BUTTON v40
+-- ✅ PERM BUTTON v39
 --=============================================================
 permBtn.MouseButton1Click:Connect(function()
     setRandomQuote()
@@ -2648,6 +2407,7 @@ end
 RunService.Heartbeat:Connect(function()
     if not getgenv().AntiTP_Ativo then return end
 
+    -- ✅ FIX: se Anti-Void acabou de TP, ignora essa frame
     if getgenv().AntiTP_IgnorarProximo then
         getgenv().AntiTP_IgnorarProximo = false
         local c = player.Character
@@ -2920,10 +2680,12 @@ local function avTeleportar(posicao, character)
     hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
 end
 
+-- ✅ FIX: Anti-Void avisa o Anti-TP + protege contra erros
 local function avTeleportarParaSuperficie(character)
     if avTpCooldown then return end
     avTpCooldown = true
 
+    -- ✅ FIX BUG 1: avisa Anti-TP pra ignorar esse TP
     getgenv().AntiTP_IgnorarProximo = true
 
     avTempoCaindo = 0
@@ -2956,6 +2718,7 @@ local function avTeleportarParaSuperficie(character)
         warn("[AntiVoid] erro no TP:", erro)
     end
 
+    -- ✅ FIX BUG 2: garante que o cooldown sempre reseta
     local cooldown = avLocalSeguroAtivo and 0.3 or 1.5
     task.wait(cooldown)
     avTpCooldown = false
@@ -3152,7 +2915,7 @@ antiVoidBtn.MouseButton1Click:Connect(function()
 end)
 
 --=============================================================
--- ✅ CLEAR BUTTON v40
+-- ✅ CLEAR BUTTON v39
 --=============================================================
 clearBtn.MouseButton1Click:Connect(function()
     setRandomQuote()
@@ -3179,23 +2942,21 @@ clearBtn.MouseButton1Click:Connect(function()
 end)
 
 --=============================================================
--- ✅ MINIMIZAR BUTTON v40
+-- ✅ MINIMIZAR BUTTON v39
 --=============================================================
 local menuMinimizado = false
 local alturaOriginal = 320
 local alturaMinimizada = 40
 
+-- ✅ FIX: fecharPlayerPanel sempre fecha (não depende de panelOpen)
 local function fecharPlayerPanel()
-    if panelTween then panelTween:Cancel() end
-
     panelOpen = false
     tpPlayerBtn:SetAttribute("ActiveState", false)
-    panelTween = TweenService:Create(
+    TweenService:Create(
         slidingPanel,
         TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
         { Size = UDim2.new(0, 0, 1, 0) }
-    )
-    panelTween:Play()
+    ):Play()
     tpPlayerBtn.BackgroundColor3 = COR_PANEL
     local tpLbl = tpPlayerBtn:FindFirstChildOfClass("TextLabel")
     if tpLbl then tpLbl.TextColor3 = COR_TEXTO end
@@ -3235,11 +2996,11 @@ minimizarBtn.MouseButton1Click:Connect(function()
         TweenService:Create(innerStroke, TweenInfo.new(0.25), { Transparency = 1 }):Play()
 
         for _, btn in ipairs(ocultarAoMinimizar) do
-            if btn and btn.Parent then
-                btn.Visible = false
-                btn.Active = false
-                btn.Selectable = false
-            end
+            -- ✅ FIX BUG 2: cancela tweens pendentes
+            btn.BackgroundTransparency = btn.BackgroundTransparency
+            btn.Visible = false
+            btn.Active = false
+            btn.Selectable = false
         end
 
         minimizarBtn.Position = UDim2.new(0.05, 0, 0, 10)
@@ -3276,7 +3037,6 @@ minimizarBtn.MouseButton1Click:Connect(function()
         }):Play()
 
         for _, btn in ipairs(ocultarAoMinimizar) do
-            if not btn or not btn.Parent then continue end
             btn.Visible = true
             btn.Active = true
             btn.Selectable = true
@@ -3382,14 +3142,12 @@ local function fullCleanup()
     wipePortalsPorTag(TAG_VOID, true)
     wipePortalsPorTag(TAG_RET, true)
     wipePortalsPorTag(TAG_SAIDA, true)
-    wipePortalsPorTag(TAG_RAND, true)
     table.clear(activePortals)
 
     deletarVoidPlace()
     deletarLocalTP()
     deletarCeuPlace()
     deletarCeuLocalTP()
-    deletarRandomLocalTP()
 
     limparMarcacao(true)
 
@@ -3483,12 +3241,6 @@ closeBtn.MouseButton1Click:Connect(function()
     deletarLocalTP()
     deletarCeuPlace()
     deletarCeuLocalTP()
-    deletarRandomLocalTP()
-
-    if panelTween then
-        panelTween:Cancel()
-        panelTween = nil
-    end
 
     if panelOpen then
         panelOpen = false
@@ -3498,7 +3250,9 @@ closeBtn.MouseButton1Click:Connect(function()
         if tpLbl then tpLbl.TextColor3 = COR_TEXTO end
     end
 
-    -- ✅ FIX BUG 3: sem task.wait(0.5) — o slideOutTween já espera
+    -- ✅ FIX BUG 4: espera tweens terminarem antes do cleanup
+    task.wait(0.5)
+
     local slideOutTween = TweenService:Create(
         mainFrame,
         TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.In),
@@ -3510,4 +3264,4 @@ closeBtn.MouseButton1Click:Connect(function()
     fullCleanup()
 end)
 
-print("✅ Prime Rick Portal GUI v40 — Botão RANDOM no menu + FIX bugs 🎲")
+print("✅ Prime Rick Portal GUI v39 — Todos os bugs corrigidos 🎯")
