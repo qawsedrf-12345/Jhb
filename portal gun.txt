@@ -1,7 +1,7 @@
 --=============================================================
--- RICK PRIME v42 — Portal GUI + Marcação + Anti-TP + Anti-Void
+-- RICK PRIME v43 — Portal GUI + Marcação + Anti-TP + Anti-Void
 -- Estilo Tech / HUD Sci-Fi — Sistema de Favoritos ♾
--- v42: Refatoração completa, todas as dependências resolvidas
+-- v43: + Botão RANDOM, correções de performance e robustez
 --=============================================================
 local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
@@ -47,6 +47,7 @@ local AV = {
     RaioInicial    = 5,
     RaioIncremento = 5,
     RaioMaximo     = 3000,
+    RaioMaximoBusca = 200,       -- ✅ LIMITE PARA EVITAR LAG
     PassosPorAnel  = 20,
     AlturaAcima    = 150,
     AlturaAbaixo   = 500,
@@ -56,10 +57,28 @@ local AV = {
     JanelaMortes    = 30,
 }
 
+local RANDOM_CFG = {
+    MAX_TENTATIVAS   = 50,
+    DIST_MIN         = 300,
+    DIST_MAX         = 5000,
+    ALTURA_CEU       = 2000,
+    ALTURA_ABAIXO    = 3000,
+    DOT_MINIMO       = 0.7,
+    PONTO_BOM        = 0.8,
+    TIMEOUT          = 3,
+    OFFSET_Y         = 5,
+    PORTAL_FECHAR    = 15,
+    VOID_Y_MIN       = -600,
+    VOID_Y_MAX       = -400,
+    CEU_Y_MIN        = 4900,
+    CEU_Y_MAX        = 5100,
+}
+
 local TAG_GEN   = "RP_Gen_"   .. player.UserId
 local TAG_M1    = "RP_M1_"    .. player.UserId
 local TAG_M2    = "RP_M2_"    .. player.UserId
 local TAG_VOID  = "RP_Void_"  .. player.UserId
+local TAG_CEU   = "RP_Ceu_"   .. player.UserId    -- ✅ TAG SEPARADA
 local TAG_RET   = "RP_Ret_"   .. player.UserId
 local TAG_SAIDA = "RP_Saida_" .. player.UserId
 
@@ -187,6 +206,10 @@ local function alertaVermelho()
     ):Play()
 end
 
+-- ✅ LIMITE DE PARTÍCULAS SIMULTÂNEAS
+local MAX_PARTICULAS = 30
+local particulasAtivas = 0
+
 local function efeitoOndas(quantidade, duracao, cor)
     task.spawn(function()
         for _ = 1, quantidade do
@@ -228,6 +251,9 @@ end
 local function efeitoParticulas(quantidade, cor)
     task.spawn(function()
         for _ = 1, quantidade do
+            if particulasAtivas >= MAX_PARTICULAS then break end
+            particulasAtivas = particulasAtivas + 1
+
             task.spawn(function()
                 local part = Instance.new("Frame")
                 part.Size = UDim2.new(0, math.random(3, 8), 0, math.random(3, 8))
@@ -253,6 +279,7 @@ local function efeitoParticulas(quantidade, cor)
                 tw:Play()
                 tw.Completed:Wait()
                 if part and part.Parent then part:Destroy() end
+                particulasAtivas = math.max(0, particulasAtivas - 1)
             end)
         end
     end)
@@ -316,14 +343,16 @@ end
 -- EFEITO TP
 --=============================================================
 local COR_TP = Color3.fromRGB(50, 255, 130)
-local efeitoTPAtivo = false
+local efeitoTPRefs = 0
 
 local function efeitoTP()
-    if efeitoTPAtivo then
+    efeitoTPRefs = efeitoTPRefs + 1
+    if efeitoTPRefs > 1 then
         flashTela(COR_TP, 0.12)
+        efeitoTPRefs = efeitoTPRefs - 1
         return
     end
-    efeitoTPAtivo = true
+
     task.spawn(function()
         fadeFrame.BackgroundColor3 = COR_TP
         fadeFrame.BackgroundTransparency = 0.5
@@ -342,7 +371,7 @@ local function efeitoTP()
         removerBlur(0.4)
 
         task.wait(0.6)
-        efeitoTPAtivo = false
+        efeitoTPRefs = 0
     end)
 end
 
@@ -373,20 +402,16 @@ local function fecharPortal(portalPart)
 
     TweenService:Create(portalPart, TweenInfo.new(DUR, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {Size = Vector3.new(0, 0, 0.01)}):Play()
 
-    local inicio = tick()
-    local conn
-    conn = RunService.Heartbeat:Connect(function()
-        if not portalPart or not portalPart.Parent then
-            if conn then conn:Disconnect() end
-            return
+    task.spawn(function()
+        local inicio = tick()
+        while portalPart and portalPart.Parent do
+            if (tick() - inicio) >= DUR then
+                if portalPart and portalPart.Parent then portalPart:Destroy() end
+                break
+            end
+            portalPart.CFrame = cframeInicial
+            RunService.Heartbeat:Wait()
         end
-        local p = (tick() - inicio) / DUR
-        if p >= 1 then
-            conn:Disconnect()
-            if portalPart and portalPart.Parent then portalPart:Destroy() end
-            return
-        end
-        portalPart.CFrame = cframeInicial
     end)
 end
 
@@ -418,13 +443,23 @@ local function wipePortalsPorTag(tag, comEfeito)
     return #portais
 end
 
+-- ✅ COOLDOWN DE WIPE
+local ultimoWipe = 0
+local WIPE_COOLDOWN = 0.3
+
 local function wipeAllPortals(comEfeito)
+    local agora = tick()
+    if agora - ultimoWipe < WIPE_COOLDOWN then
+        return 0
+    end
+    ultimoWipe = agora
+
     local total = wipePortalsPorTag(TAG_GEN, comEfeito)
     table.clear(activePortals)
     return total
 end
 
-for _, tag in ipairs({TAG_GEN, TAG_M1, TAG_M2, TAG_VOID, TAG_RET, TAG_SAIDA}) do
+for _, tag in ipairs({TAG_GEN, TAG_M1, TAG_M2, TAG_VOID, TAG_CEU, TAG_RET, TAG_SAIDA}) do
     for _, p in ipairs(CollectionService:GetTagged(tag)) do
         if p then p:Destroy() end
     end
@@ -666,8 +701,8 @@ screenGui.ResetOnSpawn = false
 screenGui.Parent = CoreGui
 
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 100, 0, 320)
-mainFrame.Position = UDim2.new(0, 20, 0.35, -160)
+mainFrame.Size = UDim2.new(0, 100, 0, 340)
+mainFrame.Position = UDim2.new(0, 20, 0.35, -170)
 mainFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
@@ -744,7 +779,7 @@ local titleTag = Instance.new("TextLabel")
 titleTag.Size = UDim2.new(1, -10, 0, 8)
 titleTag.Position = UDim2.new(0, 5, 0, 5)
 titleTag.BackgroundTransparency = 1
-titleTag.Text = "▰ PRIME OS // v42.0"
+titleTag.Text = "▰ PRIME OS // v43.0"
 titleTag.TextColor3 = COR_CIANO
 titleTag.Font = Enum.Font.Code
 titleTag.TextSize = 6
@@ -822,7 +857,7 @@ local function setRandomQuote()
 end
 
 --=============================================================
--- ✅ TODOS OS ESTADOS DECLARADOS AQUI (antes de qualquer handler)
+-- ESTADOS
 --=============================================================
 local panelOpen = false
 local playerBtns = {}
@@ -908,19 +943,20 @@ local function createButton(text, yPos, iconeCor, semHover)
 end
 
 --=============================================================
--- BOTÕES PRINCIPAIS
+-- BOTÕES PRINCIPAIS (RANDOM abaixo do CEUS)
 --=============================================================
 local tpPlayerBtn  = createButton("▸ SELECT TARGET", 44, COR_LINHA)
 local clearBtn     = createButton("▸ CLEAR PORTALS", 62, COR_CIANO)
 local voidBtn      = createButton("▸ VOID DIMENSION", 80, COR_VERMELHO)
 local ceusBtn      = createButton("▸ CEUS", 98, COR_CIANO, true)
-local marcacaoBtn  = createButton("▸ MARCACAO [0/2]", 116, Color3.fromRGB(255, 180, 40))
-local permBtn      = createButton("▸ POSICAO PERM [OFF]", 134, COR_DOURADO)
-local antiTPBtn    = createButton("▸ ANTI-TP [OFF]", 152, COR_VERMELHO)
-local antiVoidBtn  = createButton("▸ ANTI-VOID [OFF]", 170, COR_CIANO)
-local minimizarBtn = createButton("▾ MINIMIZAR", 192, COR_CIANO)
-local rejoinBtn    = createButton("↻ REJOIN", 210, COR_DOURADO)
-local closeBtn     = createButton("✕ CLOSE SESSION", 234, COR_VERMELHO)
+local randomBtn    = createButton("▸ RANDOM", 116, COR_DOURADO)              -- ✅ NOVO
+local marcacaoBtn  = createButton("▸ MARCACAO [0/2]", 134, Color3.fromRGB(255, 180, 40))
+local permBtn      = createButton("▸ POSICAO PERM [OFF]", 152, COR_DOURADO)
+local antiTPBtn    = createButton("▸ ANTI-TP [OFF]", 170, COR_VERMELHO)
+local antiVoidBtn  = createButton("▸ ANTI-VOID [OFF]", 188, COR_CIANO)
+local minimizarBtn = createButton("▾ MINIMIZAR", 210, COR_CIANO)
+local rejoinBtn    = createButton("↻ REJOIN", 228, COR_DOURADO)
+local closeBtn     = createButton("✕ CLOSE SESSION", 252, COR_VERMELHO)
 
 local closeStroke    = closeBtn:FindFirstChildOfClass("UIStroke")
 local voidStroke     = voidBtn:FindFirstChildOfClass("UIStroke")
@@ -931,6 +967,7 @@ local antiVoidStroke = antiVoidBtn:FindFirstChildOfClass("UIStroke")
 local minimizarStroke = minimizarBtn:FindFirstChildOfClass("UIStroke")
 local rejoinStroke    = rejoinBtn:FindFirstChildOfClass("UIStroke")
 local ceusStroke      = ceusBtn:FindFirstChildOfClass("UIStroke")
+local randomStroke    = randomBtn:FindFirstChildOfClass("UIStroke")
 
 if voidStroke then voidStroke.Color = COR_VERMELHO voidStroke.Transparency = 0.3 end
 if marcacaoStroke then marcacaoStroke.Color = Color3.fromRGB(180, 130, 0) marcacaoStroke.Transparency = 0.4 end
@@ -940,6 +977,7 @@ if permStroke then permStroke.Color = COR_DOURADO_D permStroke.Transparency = 0.
 if antiVoidStroke then antiVoidStroke.Color = COR_CIANO antiVoidStroke.Transparency = 0.4 end
 if minimizarStroke then minimizarStroke.Color = COR_CIANO minimizarStroke.Transparency = 0.4 end
 if rejoinStroke then rejoinStroke.Color = COR_DOURADO_D rejoinStroke.Transparency = 0.4 end
+if randomStroke then randomStroke.Color = COR_DOURADO_D randomStroke.Transparency = 0.3 end
 
 ceusBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 ceusBtn.BackgroundTransparency = 0
@@ -1021,7 +1059,6 @@ panelTitle.Position = UDim2.new(0, 4, 0, 0)
 panelTitle.ZIndex = 4
 panelTitle.Parent = panelInner
 
--- ♾ FAVORITOS
 local favBtn = Instance.new("TextButton")
 favBtn.Size = UDim2.new(0, 20, 0, 13)
 favBtn.Position = UDim2.new(1, -46, 0, 0)
@@ -1045,7 +1082,6 @@ favStroke.Thickness = 1
 favStroke.Transparency = 0.3
 favStroke.Parent = favBtn
 
--- ⟳ REFRESH
 local refreshBtn = Instance.new("TextButton")
 refreshBtn.Size = UDim2.new(0, 20, 0, 13)
 refreshBtn.Position = UDim2.new(1, -24, 0, 0)
@@ -1069,7 +1105,6 @@ refreshStroke.Thickness = 1
 refreshStroke.Transparency = 0.3
 refreshStroke.Parent = refreshBtn
 
--- SEARCH BOX
 local searchBox = Instance.new("TextBox")
 searchBox.Size = UDim2.new(1, -8, 0, 15)
 searchBox.Position = UDim2.new(0, 4, 0, 13)
@@ -1238,7 +1273,7 @@ local function spawnPortalSaida(char)
 end
 
 --=============================================================
--- HELPERS DE PAINEL (usam panelTween — já declarado)
+-- HELPERS DE PAINEL
 --=============================================================
 local function fecharPainel()
     if panelTween then panelTween:Cancel() end
@@ -1722,7 +1757,6 @@ local function refreshPlayerList()
     refreshLock = true
 
     local ok, resultado = pcall(function()
-        -- 1. Limpa órfãos
         for _, child in ipairs(scrollingList:GetChildren()) do
             if child:IsA("TextButton") then
                 local uid = child:GetAttribute("UserId")
@@ -1732,14 +1766,12 @@ local function refreshPlayerList()
             end
         end
 
-        -- 2. Limpa refs mortas
         for userId, btn in pairs(playerBtns) do
             if not btn or not btn.Parent then
                 playerBtns[userId] = nil
             end
         end
 
-        -- 3. Remove quem saiu
         for userId, btn in pairs(playerBtns) do
             local jogador = Players:GetPlayerByUserId(userId)
             if not jogador or jogador == player then
@@ -1748,7 +1780,6 @@ local function refreshPlayerList()
             end
         end
 
-        -- 4. Pré-cache de amizades (evita yield no loop de criação)
         local amizades = {}
         for _, p in ipairs(Players:GetPlayers()) do
             if p ~= player then
@@ -1757,7 +1788,6 @@ local function refreshPlayerList()
             end
         end
 
-        -- 5. Cria os que faltam
         for _, p in ipairs(Players:GetPlayers()) do
             if p ~= player and not playerBtns[p.UserId] then
                 playerBtns[p.UserId] = criarBotaoPlayer(p, 0, amizades[p.UserId] or false)
@@ -1787,6 +1817,72 @@ local function contarPlayersVisiveis()
         end
     end
     return count
+end
+
+--=============================================================
+-- RANDOM — busca de ponto seguro
+--=============================================================
+local function superficieEhSegura(res)
+    if not res or not res.Instance then return false end
+    if not res.Instance.CanCollide then return false end
+
+    local dot = res.Normal:Dot(Vector3.new(0, 1, 0))
+    if dot < RANDOM_CFG.DOT_MINIMO then return false end
+
+    local y = res.Position.Y
+    if y >= RANDOM_CFG.VOID_Y_MIN and y <= RANDOM_CFG.VOID_Y_MAX then
+        return false
+    end
+    if y >= RANDOM_CFG.CEU_Y_MIN and y <= RANDOM_CFG.CEU_Y_MAX then
+        return false
+    end
+
+    return true
+end
+
+local function buscarPontoAleatorio(character)
+    if not character then return nil end
+
+    local hrp = character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return nil end
+
+    local origem = hrp.Position
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = { character }
+    params.IgnoreWater = true
+
+    local melhorPonto = nil
+    local melhorDist  = 0
+
+    for _ = 1, RANDOM_CFG.MAX_TENTATIVAS do
+        local angulo = math.random() * math.pi * 2
+        local dist = RANDOM_CFG.DIST_MIN
+            + math.random() * (RANDOM_CFG.DIST_MAX - RANDOM_CFG.DIST_MIN)
+
+        local x = origem.X + math.cos(angulo) * dist
+        local z = origem.Z + math.sin(angulo) * dist
+
+        local inicioRay = Vector3.new(x, origem.Y + RANDOM_CFG.ALTURA_CEU, z)
+        local direcao   = Vector3.new(0, -(RANDOM_CFG.ALTURA_CEU + RANDOM_CFG.ALTURA_ABAIXO), 0)
+
+        local res = workspace:Raycast(inicioRay, direcao, params)
+
+        if superficieEhSegura(res) then
+            local distReal = (res.Position - origem).Magnitude
+
+            if distReal > melhorDist then
+                melhorPonto = res.Position
+                melhorDist  = distReal
+            end
+
+            if distReal >= RANDOM_CFG.DIST_MAX * RANDOM_CFG.PONTO_BOM then
+                return res.Position
+            end
+        end
+    end
+
+    return melhorPonto
 end
 
 --=============================================================
@@ -1891,7 +1987,7 @@ local function abrirPortalCeu()
 
     criarCeuLocalTP(root.Position)
 
-    local ceuPortal = createPortalInstance(root.CFrame * CFrame.new(0, 0, -5), TAG_VOID)
+    local ceuPortal = createPortalInstance(root.CFrame * CFrame.new(0, 0, -5), TAG_CEU)
     local lblCeu = ceusBtn:FindFirstChildOfClass("TextLabel")
     if lblCeu then
         lblCeu.Text = "▸ ENTRAR CEUS"
@@ -1960,10 +2056,131 @@ local function abrirPortalCeu()
                     task.wait(0.3)
                     deletarCeuPlace()
                     deletarCeuLocalTP()
-                    wipePortalsPorTag(TAG_VOID, true)
+                    wipePortalsPorTag(TAG_CEU, true)
                     wipePortalsPorTag(TAG_RET, true)
                 end)
             end)
+        end)
+    end)
+end
+
+--=============================================================
+-- RANDOM (abre) — usa a mesma lógica do portal de destino
+--=============================================================
+local function abrirPortalRandom()
+    setRandomQuote()
+    wipeAllPortals(true)
+    fecharPainel()
+
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+
+    local lbl = randomBtn:FindFirstChildOfClass("TextLabel")
+    if lbl then
+        lbl.Text = "▸ SCANNING..."
+        lbl.TextColor3 = COR_DOURADO
+    end
+    randomBtn.BackgroundColor3 = Color3.fromRGB(30, 25, 10)
+    randomBtn:SetAttribute("ActiveState", true)
+    if randomStroke then
+        randomStroke.Color = COR_DOURADO
+        randomStroke.Transparency = 0.1
+    end
+
+    local pontoEncontrado = nil
+    local buscaConcluida = false
+
+    task.spawn(function()
+        local ok, res = pcall(buscarPontoAleatorio, char)
+        if ok then pontoEncontrado = res end
+        buscaConcluida = true
+    end)
+
+    local inicio = tick()
+    while not buscaConcluida and (tick() - inicio) < RANDOM_CFG.TIMEOUT do
+        task.wait(0.05)
+    end
+
+    if lbl then
+        lbl.Text = "▸ RANDOM"
+        lbl.TextColor3 = COR_TEXTO
+    end
+    randomBtn.BackgroundColor3 = COR_PANEL
+    randomBtn:SetAttribute("ActiveState", false)
+    if randomStroke then
+        randomStroke.Color = COR_DOURADO_D
+        randomStroke.Transparency = 0.3
+    end
+
+    if not pontoEncontrado then
+        if lbl then lbl.Text = "▸ NO GROUND!" end
+        task.wait(1.2)
+
+        local spawn = workspace:FindFirstChildOfClass("SpawnLocation")
+        if spawn then
+            pontoEncontrado = spawn.Position
+        else
+            if lbl then lbl.Text = "▸ FAILED" end
+            task.wait(1.2)
+            if lbl then lbl.Text = "▸ RANDOM" end
+            return
+        end
+    end
+
+    local charAtual = player.Character
+    local rootAtual = charAtual and charAtual:FindFirstChild("HumanoidRootPart")
+    if not rootAtual then return end
+
+    local portalEntrada = createPortalInstance(rootAtual.CFrame * CFrame.new(0, 0, -5), TAG_GEN)
+    if not portalEntrada then return end
+
+    if lbl then lbl.Text = "▸ ENTER PORTAL" end
+
+    local resetAtivo = true
+    task.delay(RANDOM_CFG.PORTAL_FECHAR, function()
+        if resetAtivo and portalEntrada and portalEntrada.Parent then
+            if lbl then lbl.Text = "▸ RANDOM" end
+            fecharPortal(portalEntrada)
+        end
+    end)
+
+    local touched = false
+    portalEntrada.Touched:Connect(function(hit)
+        if touched or hit.Parent ~= charAtual then return end
+        touched = true
+        resetAtivo = false
+        if lbl then lbl.Text = "▸ JUMPING..." end
+
+        playTPSound()
+        playRandomTPSound()
+        efeitoTP()
+
+        task.delay(0.1, function()
+            if portalEntrada and portalEntrada.Parent then
+                fecharPortal(portalEntrada)
+            end
+        end)
+
+        task.delay(0.2, function()
+            local cc = player.Character
+            local cr = cc and cc:FindFirstChild("HumanoidRootPart")
+            if not cr then
+                if lbl then lbl.Text = "▸ RANDOM" end
+                return
+            end
+
+            local rot = cr.CFrame - cr.CFrame.Position
+            local destinoFinal = pontoEncontrado + Vector3.new(0, RANDOM_CFG.OFFSET_Y, 0)
+            cr.CFrame = CFrame.new(destinoFinal) * rot
+            cr.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+            cr.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+
+            if lbl then lbl.Text = "▸ RANDOM" end
+
+            task.wait(0.05)
+            local cc2 = player.Character
+            if cc2 then spawnPortalSaida(cc2) end
         end)
     end)
 end
@@ -1973,6 +2190,7 @@ end
 --=============================================================
 voidBtn.MouseButton1Click:Connect(abrirPortalVoid)
 ceusBtn.MouseButton1Click:Connect(abrirPortalCeu)
+randomBtn.MouseButton1Click:Connect(abrirPortalRandom)
 marcacaoBtn.MouseButton1Click:Connect(clicarMarcacao)
 
 tpPlayerBtn.MouseButton1Click:Connect(function()
@@ -2265,6 +2483,7 @@ RunService.Heartbeat:Connect(function()
 end)
 
 player.CharacterAdded:Connect(function()
+    if not getgenv().AntiTP_Ativo then return end
     atpUltPos = nil
     atpUltimoCheck = 0
     atpUltimoRespawn = os.clock()
@@ -2353,6 +2572,9 @@ end
 local function avEfeitoParticulas(quantidade, cor)
     task.spawn(function()
         for _ = 1, quantidade do
+            if particulasAtivas >= MAX_PARTICULAS then break end
+            particulasAtivas = particulasAtivas + 1
+
             task.spawn(function()
                 local part = Instance.new("Frame")
                 part.Size = UDim2.new(0, math.random(3, 8), 0, math.random(3, 8))
@@ -2378,6 +2600,7 @@ local function avEfeitoParticulas(quantidade, cor)
                 tw:Play()
                 tw.Completed:Wait()
                 if part and part.Parent then part:Destroy() end
+                particulasAtivas = math.max(0, particulasAtivas - 1)
             end)
         end
     end)
@@ -2412,7 +2635,7 @@ local function avBuscarSuperficie(posicao, character)
     local candidatos = {}
     local raio = AV.RaioInicial
 
-    while raio <= AV.RaioMaximo do
+    while raio <= AV.RaioMaximoBusca do    -- ✅ LIMITADO
         for i = 0, AV.PassosPorAnel - 1 do
             local angulo = (i / AV.PassosPorAnel) * math.pi * 2
             local x = posicao.X + math.cos(angulo) * raio
@@ -2486,6 +2709,10 @@ local function avTeleportarParaSuperficie(character)
     end)
 
     if not sucesso then warn("[AntiVoid] erro no TP:", erro) end
+
+    task.delay(0.2, function()    -- ✅ RESET RÁPIDO
+        getgenv().AntiTP_IgnorarProximo = false
+    end)
 
     local cooldown = avLocalSeguroAtivo and 0.3 or 1.5
     task.wait(cooldown)
@@ -2710,11 +2937,11 @@ end)
 -- MINIMIZAR
 --=============================================================
 local menuMinimizado = false
-local alturaOriginal = 320
+local alturaOriginal = 340
 local alturaMinimizada = 40
 
 local ocultarAoMinimizar = {
-    tpPlayerBtn, clearBtn, voidBtn, ceusBtn, marcacaoBtn,
+    tpPlayerBtn, clearBtn, voidBtn, ceusBtn, randomBtn, marcacaoBtn,
     permBtn, antiTPBtn, antiVoidBtn, rejoinBtn, closeBtn
 }
 
@@ -2781,7 +3008,7 @@ minimizarBtn.MouseButton1Click:Connect(function()
         TweenService:Create(statusBar, TweenInfo.new(0.25), {BackgroundTransparency = 0}):Play()
         TweenService:Create(innerStroke, TweenInfo.new(0.25), {Transparency = 0.4}):Play()
 
-        minimizarBtn.Position = UDim2.new(0.05, 0, 0, 192)
+        minimizarBtn.Position = UDim2.new(0.05, 0, 0, 210)
 
         TweenService:Create(mainFrame, TweenInfo.new(0.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
             Size = UDim2.new(0, 100, 0, alturaOriginal)
@@ -2821,6 +3048,8 @@ minimizarBtn.MouseButton1Click:Connect(function()
                 if btn == closeBtn then
                     strokeTransOriginal = 0.2
                 elseif btn == voidBtn then
+                    strokeTransOriginal = 0.3
+                elseif btn == randomBtn then
                     strokeTransOriginal = 0.3
                 elseif btn == antiTPBtn or btn == marcacaoBtn or btn == permBtn or btn == antiVoidBtn or btn == rejoinBtn then
                     strokeTransOriginal = 0.4
@@ -2888,6 +3117,7 @@ local function fullCleanup()
     wipePortalsPorTag(TAG_M1, true)
     wipePortalsPorTag(TAG_M2, true)
     wipePortalsPorTag(TAG_VOID, true)
+    wipePortalsPorTag(TAG_CEU, true)
     wipePortalsPorTag(TAG_RET, true)
     wipePortalsPorTag(TAG_SAIDA, true)
     table.clear(activePortals)
@@ -2953,7 +3183,7 @@ closeBtn.MouseButton1Click:Connect(function()
     local slideOutTween = TweenService:Create(
         mainFrame,
         TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.In),
-        {Position = UDim2.new(0, -150, 0.35, -160)}
+        {Position = UDim2.new(0, -150, 0.35, -170)}
     )
     slideOutTween:Play()
     slideOutTween.Completed:Wait()
@@ -2961,4 +3191,4 @@ closeBtn.MouseButton1Click:Connect(function()
     fullCleanup()
 end)
 
-print("✅ Rick Prime v42 — Verificado e corrigido 🎯")
+print("✅ Rick Prime v43 — RANDOM abaixo do CEUS, bugs corrigidos 🎯")
