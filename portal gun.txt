@@ -1,17 +1,8 @@
 --=============================================================
--- RICK PRIME v44 — Portal GUI + Marcação + Anti-TP + Anti-Void
+-- RICK PRIME v43 — Portal GUI + Marcação + Anti-TP + Anti-Void
 -- Estilo Tech / HUD Sci-Fi — Sistema de Favoritos ♾
--- v44: getgenv seguro, ScreenGui com fallback, RANDOM visível
+-- v43: + Botão RANDOM, correções de performance e robustez
 --=============================================================
-
--- ✅ getgenv() seguro (evita travar em executores sem suporte)
-local function G() 
-    if getgenv then return getgenv() end
-    if _G then return _G end
-    return {}
-end
-local genv = G()
-
 local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -22,10 +13,14 @@ local RunService = game:GetService("RunService")
 local TeleportService = game:GetService("TeleportService")
 local player = Players.LocalPlayer
 
--- ✅ Cleanup de execução anterior (seguro)
-if genv.RickPortalCleanup then pcall(genv.RickPortalCleanup) end
-genv.AntiTP_Ativo = false
-genv.Marcacao_Ativo = false
+-- ✅ SEED DO RANDOM (Correção 23)
+math.randomseed(os.clock() * 1000000)
+for _ = 1, 5 do math.random() end
+
+-- ✅ Cleanup de execução anterior
+if getgenv().RickPortalCleanup then pcall(getgenv().RickPortalCleanup) end
+getgenv().AntiTP_Ativo = false
+getgenv().Marcacao_Ativo = false
 
 for _, fx in ipairs(Lighting:GetChildren()) do
     if fx:IsA("BlurEffect") and fx.Name == "RP_Blur" then
@@ -56,7 +51,7 @@ local AV = {
     RaioInicial    = 5,
     RaioIncremento = 5,
     RaioMaximo     = 3000,
-    RaioMaximoBusca = 200,
+    RaioMaximoBusca = 200,       -- ✅ LIMITE PARA EVITAR LAG
     PassosPorAnel  = 20,
     AlturaAcima    = 150,
     AlturaAbaixo   = 500,
@@ -87,7 +82,7 @@ local TAG_GEN   = "RP_Gen_"   .. player.UserId
 local TAG_M1    = "RP_M1_"    .. player.UserId
 local TAG_M2    = "RP_M2_"    .. player.UserId
 local TAG_VOID  = "RP_Void_"  .. player.UserId
-local TAG_CEU   = "RP_Ceu_"   .. player.UserId
+local TAG_CEU   = "RP_Ceu_"   .. player.UserId    -- ✅ TAG SEPARADA
 local TAG_RET   = "RP_Ret_"   .. player.UserId
 local TAG_SAIDA = "RP_Saida_" .. player.UserId
 
@@ -124,42 +119,14 @@ local ATP = {
 local atpUltPos, atpUltimoCheck, atpCooldown, atpUltimoRespawn = nil, 0, false, 0
 
 --=============================================================
--- ✅ PARENT DO GUI (fallback triplo)
---=============================================================
-local function resolverParentGUI()
-    local ok, hui = pcall(function()
-        if gethui then return gethui() end
-        return nil
-    end)
-    if ok and hui then return hui end
-
-    local ok2, cg = pcall(function()
-        return game:GetService("CoreGui")
-    end)
-    if ok2 and cg then
-        local ok3 = pcall(function()
-            local t = Instance.new("Folder")
-            t.Parent = cg
-            t:Destroy()
-        end)
-        if ok3 then return cg end
-    end
-
-    return player:WaitForChild("PlayerGui", 10)
-end
-
-local GUI_PARENT = resolverParentGUI()
-
---=============================================================
 -- FX GUI
 --=============================================================
 local fxGui = Instance.new("ScreenGui")
 fxGui.Name = "RickPortalEffects"
 fxGui.ResetOnSpawn = false
 fxGui.IgnoreGuiInset = true
-fxGui.DisplayOrder = 999998
-fxGui.Enabled = true
-fxGui.Parent = GUI_PARENT
+fxGui.DisplayOrder = 999
+fxGui.Parent = player:WaitForChild("PlayerGui")
 
 local function mkFrame(name, color, z)
     local f = Instance.new("Frame")
@@ -243,6 +210,7 @@ local function alertaVermelho()
     ):Play()
 end
 
+-- ✅ LIMITE DE PARTÍCULAS SIMULTÂNEAS
 local MAX_PARTICULAS = 30
 local particulasAtivas = 0
 
@@ -324,14 +292,14 @@ end
 local function cameraShake(intensidade, duracao)
     local camera = workspace.CurrentCamera
     if not camera then return end
-    local inicio = tick()
+    local inicio = os.clock()
     local conn
     conn = RunService.RenderStepped:Connect(function()
-        if tick() - inicio >= duracao then
+        if os.clock() - inicio >= duracao then
             conn:Disconnect()
             return
         end
-        local p = 1 - ((tick() - inicio) / duracao)
+        local p = 1 - ((os.clock() - inicio) / duracao)
         local sx = (math.random() - 0.5) * 2 * intensidade * p / 100
         local sy = (math.random() - 0.5) * 2 * intensidade * p / 100
         camera.CFrame = camera.CFrame * CFrame.new(sx, sy, 0)
@@ -360,8 +328,8 @@ local function playRandomTPSound()
     s.Parent = SoundService
 
     task.spawn(function()
-        local inicio = tick()
-        while not s.IsLoaded and tick() - inicio < 3 do
+        local inicio = os.clock()
+        while not s.IsLoaded and os.clock() - inicio < 3 do
             task.wait(0.05)
         end
         if s and s.Parent then
@@ -416,11 +384,20 @@ end
 --=============================================================
 local function fecharPortal(portalPart)
     if not portalPart or not portalPart.Parent then return end
-    if portalPart:GetAttribute("Fechando") then return end
+    
+    -- ✅ VERIFICAÇÃO MAIS ROBUSTA (Correção 21)
+    if portalPart:GetAttribute("Fechando") == true then return end
     portalPart:SetAttribute("Fechando", true)
 
     portalPart.CanTouch = false
     portalPart.CanCollide = false
+
+    -- ✅ REMOVER TAGS ANTES DE DESTRUIR (Correção 20)
+    for _, tag in ipairs(CollectionService:GetTags(portalPart)) do
+        if tag:sub(1, 3) == "RP_" then
+            CollectionService:RemoveTag(portalPart, tag)
+        end
+    end
 
     for _, emitter in ipairs(portalPart:GetChildren()) do
         if emitter:IsA("ParticleEmitter") then emitter.Enabled = false end
@@ -439,9 +416,9 @@ local function fecharPortal(portalPart)
     TweenService:Create(portalPart, TweenInfo.new(DUR, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {Size = Vector3.new(0, 0, 0.01)}):Play()
 
     task.spawn(function()
-        local inicio = tick()
+        local inicio = os.clock()
         while portalPart and portalPart.Parent do
-            if (tick() - inicio) >= DUR then
+            if (os.clock() - inicio) >= DUR then
                 if portalPart and portalPart.Parent then portalPart:Destroy() end
                 break
             end
@@ -472,18 +449,22 @@ local function wipePortalsPorTag(tag, comEfeito)
         if #portais > 0 then efeitoTP() end
     else
         for _, p in ipairs(portais) do
-            if p and p.Parent then p:Destroy() end
+            if p and p.Parent then
+                CollectionService:RemoveTag(p, tag) -- ✅ Correção 20
+                p:Destroy()
+            end
         end
     end
 
     return #portais
 end
 
+-- ✅ COOLDOWN DE WIPE
 local ultimoWipe = 0
 local WIPE_COOLDOWN = 0.3
 
 local function wipeAllPortals(comEfeito)
-    local agora = tick()
+    local agora = os.clock()
     if agora - ultimoWipe < WIPE_COOLDOWN then
         return 0
     end
@@ -496,15 +477,16 @@ end
 
 for _, tag in ipairs({TAG_GEN, TAG_M1, TAG_M2, TAG_VOID, TAG_CEU, TAG_RET, TAG_SAIDA}) do
     for _, p in ipairs(CollectionService:GetTagged(tag)) do
-        if p then p:Destroy() end
+        if p then
+            CollectionService:RemoveTag(p, tag) -- ✅ Correção 20
+            p:Destroy()
+        end
     end
 end
 
-pcall(function()
-    if GUI_PARENT:FindFirstChild("RickPortalGUI") then
-        GUI_PARENT.RickPortalGUI:Destroy()
-    end
-end)
+if CoreGui:FindFirstChild("RickPortalGUI") then
+    CoreGui.RickPortalGUI:Destroy()
+end
 
 --=============================================================
 -- VOID / CÉUS setup
@@ -672,9 +654,9 @@ local function monitorarSaidaDoVoid()
 
         if estaFora then
             if not voidForaDesde then
-                voidForaDesde = tick()
+                voidForaDesde = os.clock()
             end
-            if tick() - voidForaDesde >= VOID_TOLERANCIA then
+            if os.clock() - voidForaDesde >= VOID_TOLERANCIA then
                 voidForaDesde = nil
                 task.defer(deletarVoidPlace)
                 task.defer(deletarLocalTP)
@@ -716,9 +698,9 @@ local function monitorarSaidaDoCeu()
 
         if estaFora then
             if not ceuForaDesde then
-                ceuForaDesde = tick()
+                ceuForaDesde = os.clock()
             end
-            if tick() - ceuForaDesde >= CEU_TOLERANCIA then
+            if os.clock() - ceuForaDesde >= CEU_TOLERANCIA then
                 ceuForaDesde = nil
                 task.defer(deletarCeuPlace)
                 task.defer(deletarCeuLocalTP)
@@ -735,22 +717,15 @@ end
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "RickPortalGUI"
 screenGui.ResetOnSpawn = false
-screenGui.IgnoreGuiInset = true         -- ✅ FIX: evita deslocamento pelo topbar
-screenGui.DisplayOrder = 999999
-screenGui.Enabled = true
-screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-screenGui.Parent = GUI_PARENT
+screenGui.Parent = CoreGui
 
 local mainFrame = Instance.new("Frame")
-mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 100, 0, 360)   -- ✅ FIX: 340 → 360 (mais respiro)
-mainFrame.Position = UDim2.new(0, 20, 0.35, -180)
+mainFrame.Size = UDim2.new(0, 100, 0, 340)
+mainFrame.Position = UDim2.new(0, 20, 0.35, -170)
 mainFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-mainFrame.BackgroundTransparency = 0
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
 mainFrame.Draggable = true
-mainFrame.Visible = true
 mainFrame.Parent = screenGui
 
 local mainCorner = Instance.new("UICorner")
@@ -823,7 +798,7 @@ local titleTag = Instance.new("TextLabel")
 titleTag.Size = UDim2.new(1, -10, 0, 8)
 titleTag.Position = UDim2.new(0, 5, 0, 5)
 titleTag.BackgroundTransparency = 1
-titleTag.Text = "▰ PRIME OS // v44.0"
+titleTag.Text = "▰ PRIME OS // v43.0"
 titleTag.TextColor3 = COR_CIANO
 titleTag.Font = Enum.Font.Code
 titleTag.TextSize = 6
@@ -915,6 +890,7 @@ local marcacaoP1Perm = nil
 local panelTween = nil
 local refreshLock = false
 local refreshAgendado = false
+local refreshDebounce = false -- ✅ Correção 11
 
 --=============================================================
 -- createButton
@@ -931,7 +907,6 @@ local function createButton(text, yPos, iconeCor, semHover)
     btn.AutoButtonColor = false
     btn.BorderSizePixel = 0
     btn.ZIndex = 4
-    btn.Visible = true
     btn.Parent = innerScreen
 
     local bc = Instance.new("UICorner")
@@ -945,7 +920,6 @@ local function createButton(text, yPos, iconeCor, semHover)
     bs.Parent = btn
 
     local accent = Instance.new("Frame")
-    accent.Name = "Accent"
     accent.Size = UDim2.new(0, 2, 1, -6)
     accent.Position = UDim2.new(0, 0, 0, 3)
     accent.BackgroundColor3 = iconeCor
@@ -954,7 +928,6 @@ local function createButton(text, yPos, iconeCor, semHover)
     accent.Parent = btn
 
     local lbl = Instance.new("TextLabel")
-    lbl.Name = "Label"
     lbl.Size = UDim2.new(1, -12, 1, 0)
     lbl.Position = UDim2.new(0, 10, 0, 0)
     lbl.BackgroundTransparency = 1
@@ -990,13 +963,13 @@ local function createButton(text, yPos, iconeCor, semHover)
 end
 
 --=============================================================
--- BOTÕES PRINCIPAIS (RANDOM logo abaixo do CEUS)
+-- BOTÕES PRINCIPAIS (RANDOM abaixo do CEUS)
 --=============================================================
 local tpPlayerBtn  = createButton("▸ SELECT TARGET", 44, COR_LINHA)
 local clearBtn     = createButton("▸ CLEAR PORTALS", 62, COR_CIANO)
 local voidBtn      = createButton("▸ VOID DIMENSION", 80, COR_VERMELHO)
 local ceusBtn      = createButton("▸ CEUS", 98, COR_CIANO, true)
-local randomBtn    = createButton("▸ RANDOM", 116, COR_DOURADO)         -- ✅ logo abaixo do CEUS
+local randomBtn    = createButton("▸ RANDOM", 116, COR_DOURADO)              -- ✅ NOVO
 local marcacaoBtn  = createButton("▸ MARCACAO [0/2]", 134, Color3.fromRGB(255, 180, 40))
 local permBtn      = createButton("▸ POSICAO PERM [OFF]", 152, COR_DOURADO)
 local antiTPBtn    = createButton("▸ ANTI-TP [OFF]", 170, COR_VERMELHO)
@@ -1004,14 +977,6 @@ local antiVoidBtn  = createButton("▸ ANTI-VOID [OFF]", 188, COR_CIANO)
 local minimizarBtn = createButton("▾ MINIMIZAR", 210, COR_CIANO)
 local rejoinBtn    = createButton("↻ REJOIN", 228, COR_DOURADO)
 local closeBtn     = createButton("✕ CLOSE SESSION", 252, COR_VERMELHO)
-
--- ✅ FORÇA RANDOM VISÍVEL (caso alguma coisa dê errado em outros tratamentos)
-randomBtn.Visible = true
-randomBtn.Active = true
-randomBtn.Selectable = true
-randomBtn.BackgroundTransparency = 0.15
-randomBtn.BackgroundColor3 = COR_PANEL
-randomBtn.ZIndex = 4
 
 local closeStroke    = closeBtn:FindFirstChildOfClass("UIStroke")
 local voidStroke     = voidBtn:FindFirstChildOfClass("UIStroke")
@@ -1034,19 +999,6 @@ if minimizarStroke then minimizarStroke.Color = COR_CIANO minimizarStroke.Transp
 if rejoinStroke then rejoinStroke.Color = COR_DOURADO_D rejoinStroke.Transparency = 0.4 end
 if randomStroke then randomStroke.Color = COR_DOURADO_D randomStroke.Transparency = 0.3 end
 
--- Estilo especial do RANDOM (dourado)
-do
-    local lbl = randomBtn:FindFirstChildOfClass("TextLabel")
-    if lbl then
-        lbl.TextColor3 = COR_TEXTO
-        lbl.Text = "▸ RANDOM"
-    end
-    local acc = randomBtn:FindFirstChild("Accent")
-    if acc and acc:IsA("Frame") then
-        acc.BackgroundColor3 = COR_DOURADO
-    end
-end
-
 ceusBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 ceusBtn.BackgroundTransparency = 0
 
@@ -1058,7 +1010,7 @@ if ceusStroke then
     ceusStroke.Transparency = 0.2
 end
 
-local ceusAccent = ceusBtn:FindFirstChild("Accent")
+local ceusAccent = ceusBtn:FindFirstChild("Frame")
 if ceusAccent and ceusAccent:IsA("Frame") then
     ceusAccent.BackgroundColor3 = COR_CIANO
 end
@@ -1091,7 +1043,7 @@ slidingPanel.Position = UDim2.new(1, -5, 0, 0)
 slidingPanel.BackgroundColor3 = COR_BG
 slidingPanel.BorderSizePixel = 0
 slidingPanel.ClipsDescendants = true
-slidingPanel.ZIndex = -1
+slidingPanel.ZIndex = 1 -- ✅ Correção 10
 slidingPanel.Parent = mainFrame
 
 local panelCorner = Instance.new("UICorner")
@@ -1310,6 +1262,9 @@ local function createPortalInstance(cframe, tag, opcoes)
     return portalPart, fFront, bFront
 end
 
+--=============================================================
+-- PORTAL DE SAÍDA
+--=============================================================
 local function spawnPortalSaida(char)
     if not char or not char.Parent then return end
     local root = char:FindFirstChild("HumanoidRootPart")
@@ -1400,7 +1355,7 @@ local function atualizarLabelMarcacao()
             end
             marcacaoBtn:SetAttribute("ActiveState", 1)
         end
-        genv.Marcacao_Ativo = true
+        getgenv().Marcacao_Ativo = true
     else
         local temP1 = marcacaoP1 and marcacaoP1.Parent
         local temP2 = marcacaoP2 and marcacaoP2.Parent
@@ -1416,7 +1371,7 @@ local function atualizarLabelMarcacao()
                 marcacaoStroke.Transparency = 0.1
             end
             marcacaoBtn:SetAttribute("ActiveState", 2)
-            genv.Marcacao_Ativo = true
+            getgenv().Marcacao_Ativo = true
         elseif temP1 then
             if lbl then
                 lbl.Text = "▸ MARCACAO [1/2]"
@@ -1428,7 +1383,7 @@ local function atualizarLabelMarcacao()
                 marcacaoStroke.Transparency = 0.1
             end
             marcacaoBtn:SetAttribute("ActiveState", 1)
-            genv.Marcacao_Ativo = true
+            getgenv().Marcacao_Ativo = true
         else
             if lbl then
                 lbl.Text = "▸ MARCACAO [0/2]"
@@ -1440,7 +1395,7 @@ local function atualizarLabelMarcacao()
                 marcacaoStroke.Transparency = 0.4
             end
             marcacaoBtn:SetAttribute("ActiveState", 0)
-            genv.Marcacao_Ativo = false
+            getgenv().Marcacao_Ativo = false
         end
     end
 end
@@ -1787,8 +1742,8 @@ local function criarBotaoPlayer(p, layoutOrder, isFriend)
                         player:RequestStreamAroundAsync(targetPivot.Position)
                     end)
 
-                    local timeout = tick() + 5
-                    while tick() < timeout do
+                    local timeout = os.clock() + 5
+                    while os.clock() < timeout do
                         actualRoot = targetChar:FindFirstChild("HumanoidRootPart") or targetChar.PrimaryPart
                         if actualRoot then break end
                         task.wait(0.05)
@@ -1951,7 +1906,7 @@ local function buscarPontoAleatorio(character)
 end
 
 --=============================================================
--- VOID
+-- VOID (abre)
 --=============================================================
 local function abrirPortalVoid()
     setRandomQuote()
@@ -2039,7 +1994,7 @@ local function abrirPortalVoid()
 end
 
 --=============================================================
--- CÉUS
+-- CÉUS (abre)
 --=============================================================
 local function abrirPortalCeu()
     setRandomQuote()
@@ -2130,7 +2085,7 @@ local function abrirPortalCeu()
 end
 
 --=============================================================
--- RANDOM (abre)
+-- RANDOM (abre) — usa a mesma lógica do portal de destino
 --=============================================================
 local function abrirPortalRandom()
     setRandomQuote()
@@ -2162,8 +2117,8 @@ local function abrirPortalRandom()
         buscaConcluida = true
     end)
 
-    local inicio = tick()
-    while not buscaConcluida and (tick() - inicio) < RANDOM_CFG.TIMEOUT do
+    local inicio = os.clock()
+    while not buscaConcluida and (os.clock() - inicio) < RANDOM_CFG.TIMEOUT do
         task.wait(0.05)
     end
 
@@ -2368,12 +2323,14 @@ favBtn.MouseButton1Click:Connect(function()
 end)
 
 Players.PlayerAdded:Connect(function(p)
-    if panelOpen and not refreshAgendado then
+    if panelOpen and not refreshAgendado and not refreshDebounce then
+        refreshDebounce = true -- ✅ Correção 11
         refreshAgendado = true
-        refreshPlayerList()
-        task.delay(0.5, function()
+        
+        task.delay(0.3, function()
+            refreshPlayerList()
             refreshAgendado = false
-            if panelOpen then refreshPlayerList() end
+            refreshDebounce = false
         end)
     end
 end)
@@ -2459,7 +2416,7 @@ antiTPBtn.MouseButton1Click:Connect(function()
     setRandomQuote()
     local ativo = not antiTPBtn:GetAttribute("ActiveState")
     antiTPBtn:SetAttribute("ActiveState", ativo)
-    genv.AntiTP_Ativo = ativo
+    getgenv().AntiTP_Ativo = ativo
 
     local lbl = antiTPBtn:FindFirstChildOfClass("TextLabel")
 
@@ -2488,10 +2445,10 @@ antiTPBtn.MouseButton1Click:Connect(function()
 end)
 
 RunService.Heartbeat:Connect(function()
-    if not genv.AntiTP_Ativo then return end
+    if not getgenv().AntiTP_Ativo then return end
 
-    if genv.AntiTP_IgnorarProximo then
-        genv.AntiTP_IgnorarProximo = false
+    if getgenv().AntiTP_IgnorarProximo then
+        getgenv().AntiTP_IgnorarProximo = false
         local c = player.Character
         local h = c and c:FindFirstChild("HumanoidRootPart")
         atpUltPos = h and h.Position or nil
@@ -2545,13 +2502,6 @@ RunService.Heartbeat:Connect(function()
 
     atpUltPos = hrp.Position
     atpUltimoCheck = agora
-end)
-
-player.CharacterAdded:Connect(function()
-    if not genv.AntiTP_Ativo then return end
-    atpUltPos = nil
-    atpUltimoCheck = 0
-    atpUltimoRespawn = os.clock()
 end)
 
 --=============================================================
@@ -2691,6 +2641,7 @@ local function avEfeitoTeleporte()
     end)
 end
 
+-- ✅ BUSCA DE SUPERFÍCIE OTIMIZADA (Correção 5)
 local function avBuscarSuperficie(posicao, character)
     local params = RaycastParams.new()
     params.FilterType = Enum.RaycastFilterType.Exclude
@@ -2699,23 +2650,34 @@ local function avBuscarSuperficie(posicao, character)
 
     local candidatos = {}
     local raio = AV.RaioInicial
+    local totalRaycasts = 0
+    local MAX_RAYCASTS = 100
 
     while raio <= AV.RaioMaximoBusca do
-        for i = 0, AV.PassosPorAnel - 1 do
-            local angulo = (i / AV.PassosPorAnel) * math.pi * 2
+        local passosEsteAnel = math.min(AV.PassosPorAnel, math.floor(raio / 2) + 4)
+        
+        for i = 0, passosEsteAnel - 1 do
+            totalRaycasts = totalRaycasts + 1
+            if totalRaycasts > MAX_RAYCASTS then break end
+            
+            local angulo = (i / passosEsteAnel) * math.pi * 2
             local x = posicao.X + math.cos(angulo) * raio
             local z = posicao.Z + math.sin(angulo) * raio
             local origem = Vector3.new(x, posicao.Y + AV.AlturaAcima, z)
             local direcao = Vector3.new(0, -(AV.AlturaAcima + AV.AlturaAbaixo), 0)
             local res = workspace:Raycast(origem, direcao, params)
+            
             if res then
                 local dot = res.Normal:Dot(Vector3.new(0, 1, 0))
-                if dot >= AV.DotMinimoPisavel then
+                if dot >= AV.DotMinimoPisavel and res.Instance.CanCollide and res.Instance.Anchored then
                     table.insert(candidatos, { posicao = res.Position, raio = raio })
                 end
             end
         end
-        if #candidatos > 0 and raio >= AV.RaioInicial * 4 then break end
+        
+        if #candidatos >= 3 then break end
+        if totalRaycasts > MAX_RAYCASTS then break end
+        
         raio = raio + AV.RaioIncremento
     end
 
@@ -2742,10 +2704,11 @@ local function avTeleportar(posicao, character)
     hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
 end
 
+-- ✅ TELEPORTE COM FALLBACKS MÚLTIPLOS (Correção 22)
 local function avTeleportarParaSuperficie(character)
     if avTpCooldown then return end
     avTpCooldown = true
-    genv.AntiTP_IgnorarProximo = true
+    getgenv().AntiTP_IgnorarProximo = true
 
     avTempoCaindo = 0
     avUltimoTempo = os.clock()
@@ -2765,6 +2728,16 @@ local function avTeleportarParaSuperficie(character)
             local spawn = workspace:FindFirstChildOfClass("SpawnLocation")
             if spawn then
                 avTeleportar(spawn.Position + Vector3.new(0, 5, 0), character)
+            else
+                local params = RaycastParams.new()
+                params.FilterType = Enum.RaycastFilterType.Exclude
+                params.FilterDescendantsInstances = { character }
+                local res = workspace:Raycast(hrp.Position + Vector3.new(0, 100, 0), Vector3.new(0, -500, 0), params)
+                if res and res.Instance.CanCollide then
+                    avTeleportar(res.Position + Vector3.new(0, AV.OffsetY, 0), character)
+                else
+                    avTeleportar(Vector3.new(0, 100, 0), character)
+                end
             end
         end
 
@@ -2775,8 +2748,8 @@ local function avTeleportarParaSuperficie(character)
 
     if not sucesso then warn("[AntiVoid] erro no TP:", erro) end
 
-    task.delay(0.2, function()
-        genv.AntiTP_IgnorarProximo = false
+    task.delay(0.5, function()
+        getgenv().AntiTP_IgnorarProximo = false
     end)
 
     local cooldown = avLocalSeguroAtivo and 0.3 or 1.5
@@ -2922,15 +2895,25 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
+-- ✅ CONEXÃO CONSOLIDADA CharacterAdded (Correção 19)
 player.CharacterAdded:Connect(function()
-    if not antiVoidAtivo then return end
-    avRegistrarMorte()
-    avAtivarDesativacaoPosRespawn()
-    task.wait(0.2)
-    avAtivarJanelaPosRespawn()
-    avTempoCaindo = 0
-    avUltimoTempo = os.clock()
-    avUltimaPos = nil
+    -- Anti-TP
+    if getgenv().AntiTP_Ativo then
+        atpUltPos = nil
+        atpUltimoCheck = 0
+        atpUltimoRespawn = os.clock()
+    end
+    
+    -- Anti-Void
+    if antiVoidAtivo then
+        avRegistrarMorte()
+        avAtivarDesativacaoPosRespawn()
+        task.wait(0.2)
+        avAtivarJanelaPosRespawn()
+        avTempoCaindo = 0
+        avUltimoTempo = os.clock()
+        avUltimaPos = nil
+    end
 end)
 
 antiVoidBtn.MouseButton1Click:Connect(function()
@@ -3002,7 +2985,7 @@ end)
 -- MINIMIZAR
 --=============================================================
 local menuMinimizado = false
-local alturaOriginal = 360
+local alturaOriginal = 340
 local alturaMinimizada = 40
 
 local ocultarAoMinimizar = {
@@ -3101,7 +3084,7 @@ minimizarBtn.MouseButton1Click:Connect(function()
                     st.Color = COR_CIANO
                 end
 
-                local a = btn:FindFirstChild("Accent")
+                local a = btn:FindFirstChild("Frame")
                 if a and a:IsA("Frame") then
                     a.BackgroundTransparency = 0
                     a.BackgroundColor3 = COR_CIANO
@@ -3132,7 +3115,7 @@ minimizarBtn.MouseButton1Click:Connect(function()
                 local st = btn:FindFirstChildOfClass("UIStroke")
                 if st then st.Transparency = strokeTransOriginal end
 
-                local a = btn:FindFirstChild("Accent")
+                local a = btn:FindFirstChild("Frame")
                 if a and a:IsA("Frame") then a.BackgroundTransparency = 0 end
             end
         end
@@ -3174,17 +3157,17 @@ end)
 -- CLEANUP
 --=============================================================
 local function fullCleanup()
-    genv.AntiTP_Ativo = false
-    genv.Marcacao_Ativo = false
+    getgenv().AntiTP_Ativo = false
+    getgenv().Marcacao_Ativo = false
     antiVoidAtivo = false
 
-    pcall(wipePortalsPorTag, TAG_GEN, true)
-    pcall(wipePortalsPorTag, TAG_M1, true)
-    pcall(wipePortalsPorTag, TAG_M2, true)
-    pcall(wipePortalsPorTag, TAG_VOID, true)
-    pcall(wipePortalsPorTag, TAG_CEU, true)
-    pcall(wipePortalsPorTag, TAG_RET, true)
-    pcall(wipePortalsPorTag, TAG_SAIDA, true)
+    wipePortalsPorTag(TAG_GEN, true)
+    wipePortalsPorTag(TAG_M1, true)
+    wipePortalsPorTag(TAG_M2, true)
+    wipePortalsPorTag(TAG_VOID, true)
+    wipePortalsPorTag(TAG_CEU, true)
+    wipePortalsPorTag(TAG_RET, true)
+    wipePortalsPorTag(TAG_SAIDA, true)
     table.clear(activePortals)
 
     deletarVoidPlace()
@@ -3210,10 +3193,10 @@ local function fullCleanup()
     if screenGui and screenGui.Parent then screenGui:Destroy() end
     if fxGui and fxGui.Parent then fxGui:Destroy() end
 
-    genv.RickPortalCleanup = nil
+    getgenv().RickPortalCleanup = nil
 end
 
-genv.RickPortalCleanup = fullCleanup
+getgenv().RickPortalCleanup = fullCleanup
 
 --=============================================================
 -- CLOSE
@@ -3227,8 +3210,8 @@ closeBtn.MouseButton1Click:Connect(function()
         closeLbl.TextColor3 = COR_VERMELHO
     end
 
-    genv.AntiTP_Ativo = false
-    genv.Marcacao_Ativo = false
+    getgenv().AntiTP_Ativo = false
+    getgenv().Marcacao_Ativo = false
     antiVoidAtivo = false
 
     wipeAllPortals(true)
@@ -3248,7 +3231,7 @@ closeBtn.MouseButton1Click:Connect(function()
     local slideOutTween = TweenService:Create(
         mainFrame,
         TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.In),
-        {Position = UDim2.new(0, -150, 0.35, -180)}
+        {Position = UDim2.new(0, -150, 0.35, -170)}
     )
     slideOutTween:Play()
     slideOutTween.Completed:Wait()
@@ -3256,4 +3239,4 @@ closeBtn.MouseButton1Click:Connect(function()
     fullCleanup()
 end)
 
-print("✅ Rick Prime v44 — RANDOM abaixo do CEUS, getgenv seguro, GUI com fallback 🎯")
+print("✅ Rick Prime v43 — RANDOM abaixo do CEUS, bugs corrigidos 🎯")
