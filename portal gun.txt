@@ -1,5 +1,5 @@
 --=============================================================
--- RICK PRIME — Portal GUI + Marcação + Anti-TP (v11)
+-- RICK PRIME — Portal GUI + Marcação + Anti-TP (v15)
 --=============================================================
 local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
@@ -8,7 +8,6 @@ local CollectionService = game:GetService("CollectionService")
 local SoundService = game:GetService("SoundService")
 local Lighting = game:GetService("Lighting")
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
 local player = Players.LocalPlayer
 
 -- ✅ Cleanup de execução anterior
@@ -43,26 +42,16 @@ local marcacaoP1, marcacaoP2 = nil, nil
 local marcacaoConns = {}
 
 --=============================================================
--- ANTI-TP
+-- ANTI-TP (SIMPLIFICADO — só distância)
 --=============================================================
 local ATP = {
     DistanciaMax = 5,
     Cooldown = 0.2,
     OffsetY = 3,
-    IgnorarSeCaindo = true,
-    VelocidadeCaindoMax = -50,
     IgnorarJanela = 1.5,
-    JanelaPulo = 0.5,
 }
 
 local atpUltPos, atpUltimoCheck, atpCooldown, atpUltimoRespawn = nil, 0, false, 0
-local atpUltimoPulo = 0
-local atpPulando = false
-
-UserInputService.JumpRequest:Connect(function()
-    atpUltimoPulo = tick()
-    atpPulando = true
-end)
 
 --=============================================================
 -- FX GUI
@@ -311,7 +300,7 @@ local function fazerTPComEfeito(root, destinoCFrame)
 end
 
 --=============================================================
--- FECHAMENTO ANIMADO
+-- FECHAMENTO ANIMADO (encolhe reto, sem girar em volta do eixo)
 --=============================================================
 local function fecharPortal(portalPart)
     if not portalPart or not portalPart.Parent then return end
@@ -342,11 +331,17 @@ local function fecharPortal(portalPart)
         end
     end
 
+    -- 🌀 Animação: APENAS encolhe (mantém a rotação original)
     local DUR = 0.45
-    local rotacaoTotal = math.rad(720)
-    local _, yRotInicial = portalPart.CFrame:ToOrientation()
-    local tamanhoInicial = portalPart.Size
+    local cframeInicial = portalPart.CFrame
 
+    TweenService:Create(
+        portalPart,
+        TweenInfo.new(DUR, Enum.EasingStyle.Quart, Enum.EasingDirection.In),
+        { Size = Vector3.new(0, 0, 0.01) }
+    ):Play()
+
+    -- 🔒 Mantém a rotação fixa enquanto encolhe
     local inicio = tick()
     local conn
     conn = RunService.Heartbeat:Connect(function()
@@ -364,15 +359,7 @@ local function fecharPortal(portalPart)
             return
         end
 
-        local novoY = yRotInicial + rotacaoTotal * p
-        portalPart.CFrame = CFrame.new(portalPart.Position) * CFrame.Angles(0, novoY, 0)
-
-        local fator = 1 - p
-        portalPart.Size = Vector3.new(
-            tamanhoInicial.X * fator,
-            tamanhoInicial.Y * fator,
-            math.max(tamanhoInicial.Z * fator, 0.01)
-        )
+        portalPart.CFrame = cframeInicial
     end)
 end
 
@@ -535,7 +522,6 @@ local function monitorarSaidaDoVoid()
         local hrp = char:FindFirstChild("HumanoidRootPart")
         if not hrp then return end
 
-        -- ⚠️ Se morrer, deleta na hora (sem esperar 3s)
         if humanoid and humanoid.Health <= 0 then
             voidForaDesde = nil
             task.defer(deletarVoidPlace)
@@ -552,19 +538,16 @@ local function monitorarSaidaDoVoid()
         local estaFora = foraX or foraZ or caiuMuito or subiuMuito
 
         if estaFora then
-            -- 🕐 Começou a contar agora?
             if not voidForaDesde then
                 voidForaDesde = tick()
             end
 
-            -- ⏱️ Já passou da tolerância?
             if tick() - voidForaDesde >= VOID_TOLERANCIA then
                 voidForaDesde = nil
                 task.defer(deletarVoidPlace)
                 task.defer(deletarLocalTP)
             end
         else
-            -- ✅ Voltou pra dentro — reseta o timer
             if voidForaDesde then
                 voidForaDesde = nil
             end
@@ -908,7 +891,7 @@ uiListLayout.Padding = UDim.new(0, 2)
 uiListLayout.Parent = scrollingList
 
 local panelOpen = false
-local playerBtns = {}  -- 🔄 UserId → botão
+local playerBtns = {}
 
 --=============================================================
 -- PORTAL INSTANCE
@@ -1009,52 +992,35 @@ local function createPortalInstance(cframe, tag, opcoes)
 end
 
 --=============================================================
--- 🌀 PORTAL DE SAÍDA
+-- 🌀 PORTAL DE SAÍDA (só 1, atrás de você, parado, fecha encolhendo)
 --=============================================================
 local function spawnPortalSaida(char)
     if not char or not char.Parent then return end
     local root = char:FindFirstChild("HumanoidRootPart")
     if not root then return end
 
-    local cframeInicial = root.CFrame * CFrame.new(0, 0, -2)
+    -- 🎯 CFrame base = posição atual
+    local cframeBase = root.CFrame
 
-    local portal, fFront, bFront = createPortalInstance(cframeInicial, TAG_SAIDA, {
+    -- 🌀 Portal ATRÁS (2.5 studs atrás de você)
+    local cframeAtras = cframeBase * CFrame.new(0, 0, 2.5)
+    local portalAtras = createPortalInstance(cframeAtras, TAG_SAIDA, {
         comSom = false,
         comParticulas = false,
-        comGiro = false,
+        comGiro = true,
     })
 
-    portal.Transparency = 1
+    -- 🔦 Fundo transparente (só a textura aparece)
+    if portalAtras then portalAtras.Transparency = 1 end
 
-    if fFront then fFront.ImageTransparency = 0 end
-    if bFront then bFront.ImageTransparency = 0 end
-
-    local cframeFinal = cframeInicial * CFrame.new(0, 0, 4)
-
-    task.spawn(function()
-        local DUR = 0.6
-        local inicio = tick()
-
-        while portal and portal.Parent do
-            local p = (tick() - inicio) / DUR
-            if p >= 1 then break end
-
-            local posAtual = cframeInicial:Lerp(cframeFinal, p)
-            portal.CFrame = CFrame.new(posAtual.Position) * (cframeInicial - cframeInicial.Position)
-
-            local transparencia = math.clamp(p, 0, 1)
-            if fFront then fFront.ImageTransparency = transparencia end
-            if bFront then bFront.ImageTransparency = transparencia end
-
-            task.wait()
-        end
-
-        if portal and portal.Parent then
-            portal:Destroy()
+    -- ⏱️ Fecha depois de um tempo (com animação de encolher)
+    task.delay(0.6, function()
+        if portalAtras and portalAtras.Parent then
+            fecharPortal(portalAtras)
         end
     end)
 
-    return portal
+    return portalAtras
 end
 
 --=============================================================
@@ -1248,7 +1214,6 @@ end
 --=============================================================
 -- PLAYER LIST (INCREMENTAL)
 --=============================================================
--- Função que cria o botão de um jogador
 local function criarBotaoPlayer(p, layoutOrder)
     local pBtn = Instance.new("TextButton")
     pBtn.Size = UDim2.new(1, 0, 0, 17)
@@ -1340,7 +1305,7 @@ local function criarBotaoPlayer(p, layoutOrder)
                 if not currentRoot then return end
 
                 if actualRoot then
-                    currentRoot.CFrame = actualRoot.CFrame * CFrame.new(0, 0, -4)
+                    currentRoot.CFrame = actualRoot.CFrame * CFrame.new(0, 0, -10)
                     tpPlayerBtn.Text = "Select Player"
                 else
                     currentRoot.CFrame = targetPivot * CFrame.new(0, 5, 0)
@@ -1357,7 +1322,7 @@ local function criarBotaoPlayer(p, layoutOrder)
                     end
 
                     if actualRoot then
-                        currentRoot.CFrame = actualRoot.CFrame * CFrame.new(0, 0, -4)
+                        currentRoot.CFrame = actualRoot.CFrame * CFrame.new(0, 0, -10)
                     else
                         tpPlayerBtn.Text = "Ghosted!"
                         task.wait(1.5)
@@ -1378,9 +1343,7 @@ local function criarBotaoPlayer(p, layoutOrder)
     return pBtn
 end
 
--- Função de refresh incremental
 local function refreshPlayerList()
-    -- ✅ Remove botões de quem saiu
     for userId, btn in pairs(playerBtns) do
         local jogador = Players:GetPlayerByUserId(userId)
         if not jogador or jogador == player then
@@ -1389,17 +1352,14 @@ local function refreshPlayerList()
         end
     end
 
-    -- ✅ Adiciona botões de quem entrou
     local count = 0
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= player then
             count = count + 1
 
             if playerBtns[p.UserId] then
-                -- Já existe — só atualiza LayoutOrder
                 playerBtns[p.UserId].LayoutOrder = count
             else
-                -- Cria novo
                 playerBtns[p.UserId] = criarBotaoPlayer(p, count)
             end
         end
@@ -1409,7 +1369,6 @@ local function refreshPlayerList()
     return count
 end
 
--- 🔄 Botão de refresh clicado
 refreshBtn.MouseButton1Click:Connect(function()
     refreshBtn.Text = "⏳"
 
@@ -1426,7 +1385,6 @@ refreshBtn.MouseButton1Click:Connect(function()
         BackgroundColor3 = Color3.fromRGB(20, 50, 30)
     }):Play()
 
-    -- ✅ Feedback: título mostra contagem por 2s
     panelTitle.Text = "🌀 TARGETS (" .. count .. ") 🌀"
 
     task.delay(2, function()
@@ -1475,20 +1433,18 @@ end)
 
 Players.PlayerAdded:Connect(function()
     if panelOpen then
-        task.wait(0.5)  -- espera carregar o personagem
+        task.wait(0.5)
         refreshPlayerList()
     end
 end)
 
 Players.PlayerRemoving:Connect(function(p)
-    -- ✅ Remove o botão na hora
     local btn = playerBtns[p.UserId]
     if btn and btn.Parent then
         btn:Destroy()
         playerBtns[p.UserId] = nil
     end
 
-    -- Recalcula o canvas
     local count = 0
     for _, child in ipairs(scrollingList:GetChildren()) do
         if child:IsA("TextButton") and child.Name ~= "RefreshBtn" then
@@ -1497,7 +1453,6 @@ Players.PlayerRemoving:Connect(function(p)
     end
     scrollingList.CanvasSize = UDim2.new(0, 0, 0, count * 19)
 
-    -- Se não sobrou ninguém, fecha o painel
     if panelOpen and count == 0 then
         panelOpen = false
         tpPlayerBtn:SetAttribute("ActiveState", false)
@@ -1537,7 +1492,7 @@ antiTPBtn.MouseButton1Click:Connect(function()
 end)
 
 --=============================================================
--- ANTI-TP LOOP
+-- ANTI-TP LOOP (SIMPLIFICADO — só distância)
 --=============================================================
 local function antiTP_bloquear(posicaoAnterior, character)
     local hrp = character:FindFirstChild("HumanoidRootPart")
@@ -1577,22 +1532,6 @@ RunService.Heartbeat:Connect(function()
     if atpCooldown then return end
 
     local agora = os.clock()
-
-    if agora - atpUltimoPulo < ATP.JanelaPulo then
-        atpUltPos = hrp.Position
-        atpUltimoCheck = agora
-        return
-    end
-
-    local state = humanoid:GetState()
-    if state == Enum.HumanoidStateType.Jumping
-        or state == Enum.HumanoidStateType.Freefall
-    then
-        atpUltPos = hrp.Position
-        atpUltimoCheck = agora
-        return
-    end
-
     if agora - atpUltimoCheck < ATP.Cooldown then return end
 
     if not atpUltPos then
@@ -1605,15 +1544,6 @@ RunService.Heartbeat:Connect(function()
         atpUltPos = hrp.Position
         atpUltimoCheck = agora
         return
-    end
-
-    if ATP.IgnorarSeCaindo then
-        local velY = hrp.AssemblyLinearVelocity.Y
-        if velY < ATP.VelocidadeCaindoMax then
-            atpUltPos = hrp.Position
-            atpUltimoCheck = agora
-            return
-        end
     end
 
     local distancia = (hrp.Position - atpUltPos).Magnitude
@@ -1638,8 +1568,6 @@ player.CharacterAdded:Connect(function()
     atpUltPos = nil
     atpUltimoCheck = 0
     atpUltimoRespawn = os.clock()
-    atpUltimoPulo = 0
-    atpPulando = false
 end)
 
 --=============================================================
@@ -1712,4 +1640,4 @@ closeBtn.MouseButton1Click:Connect(function()
     fullCleanup()
 end)
 
-print("✅ Prime Rick Portal GUI v11 + Refresh incremental + Void 1000 + Grama + Tolerância 3s")
+print("✅ Prime Rick Portal GUI v15 + 1 portal atrás (2.5 studs) + TP 10 studs na frente")
