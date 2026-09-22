@@ -1,7 +1,5 @@
 --=============================================================
--- RICK PRIME v43 — Portal GUI + Marcação + Anti-TP + Anti-Void
--- Estilo Tech / HUD Sci-Fi — Sistema de Favoritos ♾
--- v43: + Botão RANDOM, correções de performance e robustez
+-- RICK PRIME v43.1 — Portal GUI + Random + Anti-TP + Anti-Void
 --=============================================================
 local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
@@ -12,6 +10,33 @@ local Lighting = game:GetService("Lighting")
 local RunService = game:GetService("RunService")
 local TeleportService = game:GetService("TeleportService")
 local player = Players.LocalPlayer
+
+--=============================================================
+-- ✅ FIX: resolver parent do GUI de forma bulletproof
+--=============================================================
+local function getGuiParent()
+    local ok, hui = pcall(function()
+        if gethui then return gethui() end
+        return nil
+    end)
+    if ok and hui then return hui end
+
+    local ok2, cg = pcall(function()
+        return game:GetService("CoreGui")
+    end)
+    if ok2 and cg then
+        local ok3, _ = pcall(function()
+            local test = Instance.new("Folder")
+            test.Parent = cg
+            test:Destroy()
+        end)
+        if ok3 then return cg end
+    end
+
+    return player:WaitForChild("PlayerGui")
+end
+
+local GUI_PARENT = getGuiParent()
 
 -- ✅ Cleanup de execução anterior
 if getgenv().RickPortalCleanup then pcall(getgenv().RickPortalCleanup) end
@@ -47,7 +72,7 @@ local AV = {
     RaioInicial    = 5,
     RaioIncremento = 5,
     RaioMaximo     = 3000,
-    RaioMaximoBusca = 200,       -- ✅ LIMITE PARA EVITAR LAG
+    RaioMaximoBusca = 200,
     PassosPorAnel  = 20,
     AlturaAcima    = 150,
     AlturaAbaixo   = 500,
@@ -78,7 +103,7 @@ local TAG_GEN   = "RP_Gen_"   .. player.UserId
 local TAG_M1    = "RP_M1_"    .. player.UserId
 local TAG_M2    = "RP_M2_"    .. player.UserId
 local TAG_VOID  = "RP_Void_"  .. player.UserId
-local TAG_CEU   = "RP_Ceu_"   .. player.UserId    -- ✅ TAG SEPARADA
+local TAG_CEU   = "RP_Ceu_"   .. player.UserId
 local TAG_RET   = "RP_Ret_"   .. player.UserId
 local TAG_SAIDA = "RP_Saida_" .. player.UserId
 
@@ -121,8 +146,8 @@ local fxGui = Instance.new("ScreenGui")
 fxGui.Name = "RickPortalEffects"
 fxGui.ResetOnSpawn = false
 fxGui.IgnoreGuiInset = true
-fxGui.DisplayOrder = 999
-fxGui.Parent = player:WaitForChild("PlayerGui")
+fxGui.DisplayOrder = 999998
+fxGui.Parent = GUI_PARENT
 
 local function mkFrame(name, color, z)
     local f = Instance.new("Frame")
@@ -206,7 +231,6 @@ local function alertaVermelho()
     ):Play()
 end
 
--- ✅ LIMITE DE PARTÍCULAS SIMULTÂNEAS
 local MAX_PARTICULAS = 30
 local particulasAtivas = 0
 
@@ -443,7 +467,6 @@ local function wipePortalsPorTag(tag, comEfeito)
     return #portais
 end
 
--- ✅ COOLDOWN DE WIPE
 local ultimoWipe = 0
 local WIPE_COOLDOWN = 0.3
 
@@ -465,9 +488,11 @@ for _, tag in ipairs({TAG_GEN, TAG_M1, TAG_M2, TAG_VOID, TAG_CEU, TAG_RET, TAG_S
     end
 end
 
-if CoreGui:FindFirstChild("RickPortalGUI") then
-    CoreGui.RickPortalGUI:Destroy()
-end
+pcall(function()
+    if GUI_PARENT:FindFirstChild("RickPortalGUI") then
+        GUI_PARENT.RickPortalGUI:Destroy()
+    end
+end)
 
 --=============================================================
 -- VOID / CÉUS setup
@@ -698,15 +723,20 @@ end
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "RickPortalGUI"
 screenGui.ResetOnSpawn = false
-screenGui.Parent = CoreGui
+screenGui.IgnoreGuiInset = true
+screenGui.DisplayOrder = 999999
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.Parent = GUI_PARENT
 
 local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
 mainFrame.Size = UDim2.new(0, 100, 0, 340)
 mainFrame.Position = UDim2.new(0, 20, 0.35, -170)
 mainFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
 mainFrame.Draggable = true
+mainFrame.Visible = true
 mainFrame.Parent = screenGui
 
 local mainCorner = Instance.new("UICorner")
@@ -779,7 +809,7 @@ local titleTag = Instance.new("TextLabel")
 titleTag.Size = UDim2.new(1, -10, 0, 8)
 titleTag.Position = UDim2.new(0, 5, 0, 5)
 titleTag.BackgroundTransparency = 1
-titleTag.Text = "▰ PRIME OS // v43.0"
+titleTag.Text = "▰ PRIME OS // v43.1"
 titleTag.TextColor3 = COR_CIANO
 titleTag.Font = Enum.Font.Code
 titleTag.TextSize = 6
@@ -943,13 +973,13 @@ local function createButton(text, yPos, iconeCor, semHover)
 end
 
 --=============================================================
--- BOTÕES PRINCIPAIS (RANDOM abaixo do CEUS)
+-- BOTÕES
 --=============================================================
 local tpPlayerBtn  = createButton("▸ SELECT TARGET", 44, COR_LINHA)
 local clearBtn     = createButton("▸ CLEAR PORTALS", 62, COR_CIANO)
 local voidBtn      = createButton("▸ VOID DIMENSION", 80, COR_VERMELHO)
 local ceusBtn      = createButton("▸ CEUS", 98, COR_CIANO, true)
-local randomBtn    = createButton("▸ RANDOM", 116, COR_DOURADO)              -- ✅ NOVO
+local randomBtn    = createButton("▸ RANDOM", 116, COR_DOURADO)
 local marcacaoBtn  = createButton("▸ MARCACAO [0/2]", 134, Color3.fromRGB(255, 180, 40))
 local permBtn      = createButton("▸ POSICAO PERM [OFF]", 152, COR_DOURADO)
 local antiTPBtn    = createButton("▸ ANTI-TP [OFF]", 170, COR_VERMELHO)
@@ -1820,7 +1850,7 @@ local function contarPlayersVisiveis()
 end
 
 --=============================================================
--- RANDOM — busca de ponto seguro
+-- RANDOM — busca
 --=============================================================
 local function superficieEhSegura(res)
     if not res or not res.Instance then return false end
@@ -1886,7 +1916,7 @@ local function buscarPontoAleatorio(character)
 end
 
 --=============================================================
--- VOID (abre)
+-- VOID
 --=============================================================
 local function abrirPortalVoid()
     setRandomQuote()
@@ -1974,7 +2004,7 @@ local function abrirPortalVoid()
 end
 
 --=============================================================
--- CÉUS (abre)
+-- CÉUS
 --=============================================================
 local function abrirPortalCeu()
     setRandomQuote()
@@ -2065,7 +2095,7 @@ local function abrirPortalCeu()
 end
 
 --=============================================================
--- RANDOM (abre) — usa a mesma lógica do portal de destino
+-- RANDOM
 --=============================================================
 local function abrirPortalRandom()
     setRandomQuote()
@@ -2186,7 +2216,7 @@ local function abrirPortalRandom()
 end
 
 --=============================================================
--- HANDLERS DOS BOTÕES
+-- HANDLERS
 --=============================================================
 voidBtn.MouseButton1Click:Connect(abrirPortalVoid)
 ceusBtn.MouseButton1Click:Connect(abrirPortalCeu)
@@ -2635,7 +2665,7 @@ local function avBuscarSuperficie(posicao, character)
     local candidatos = {}
     local raio = AV.RaioInicial
 
-    while raio <= AV.RaioMaximoBusca do    -- ✅ LIMITADO
+    while raio <= AV.RaioMaximoBusca do
         for i = 0, AV.PassosPorAnel - 1 do
             local angulo = (i / AV.PassosPorAnel) * math.pi * 2
             local x = posicao.X + math.cos(angulo) * raio
@@ -2710,7 +2740,7 @@ local function avTeleportarParaSuperficie(character)
 
     if not sucesso then warn("[AntiVoid] erro no TP:", erro) end
 
-    task.delay(0.2, function()    -- ✅ RESET RÁPIDO
+    task.delay(0.2, function()
         getgenv().AntiTP_IgnorarProximo = false
     end)
 
@@ -3113,13 +3143,13 @@ local function fullCleanup()
     getgenv().Marcacao_Ativo = false
     antiVoidAtivo = false
 
-    wipePortalsPorTag(TAG_GEN, true)
-    wipePortalsPorTag(TAG_M1, true)
-    wipePortalsPorTag(TAG_M2, true)
-    wipePortalsPorTag(TAG_VOID, true)
-    wipePortalsPorTag(TAG_CEU, true)
-    wipePortalsPorTag(TAG_RET, true)
-    wipePortalsPorTag(TAG_SAIDA, true)
+    pcall(wipePortalsPorTag, TAG_GEN, true)
+    pcall(wipePortalsPorTag, TAG_M1, true)
+    pcall(wipePortalsPorTag, TAG_M2, true)
+    pcall(wipePortalsPorTag, TAG_VOID, true)
+    pcall(wipePortalsPorTag, TAG_CEU, true)
+    pcall(wipePortalsPorTag, TAG_RET, true)
+    pcall(wipePortalsPorTag, TAG_SAIDA, true)
     table.clear(activePortals)
 
     deletarVoidPlace()
@@ -3186,9 +3216,9 @@ closeBtn.MouseButton1Click:Connect(function()
         {Position = UDim2.new(0, -150, 0.35, -170)}
     )
     slideOutTween:Play()
-    slideOutTween.Completed:Wait()
+    slideOutTween:Completed:Wait()
 
     fullCleanup()
 end)
 
-print("✅ Rick Prime v43 — RANDOM abaixo do CEUS, bugs corrigidos 🎯")
+print("✅ Rick Prime v43.1 — Menu fixado + RANDOM abaixo do CEUS 🎯")
