@@ -1,13 +1,10 @@
 --=============================================================
--- RICK PRIME — Portal GUI + Marcação + Anti-TP + PERM (v33)
+-- RICK PRIME — Portal GUI + Marcação + Anti-TP + PERM (v37)
 -- Estilo Tech / HUD Sci-Fi — Sistema de Favoritos ♾
--- PERM = P1 IMORTAL quando ON | Marcação 100% normal quando OFF
--- + Áudio aleatório no TP normal (ambos tocam normal)
--- + Anti-Void toggle
--- + Minimizar (modo compacto) + Rejoin
--- + CLOSE SESSION separado
--- + FIX: botões invisíveis/clicáveis ao minimizar
--- + FIX: fecha player panel ao minimizar
+-- + CÉUS com o mesmo chão do VOID (Grass verde)
+-- + Botão CÉUS fundo preto + letras ciano
+-- + FIX minimizar definitivo (Visible=false)
+-- + Fundo do menu 100% preto
 --=============================================================
 local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
@@ -89,6 +86,7 @@ local COR_TEXTO_D  = Color3.fromRGB(80, 140, 90)
 local COR_GLOW     = Color3.fromRGB(0, 255, 130)
 local COR_DOURADO  = Color3.fromRGB(255, 200, 50)
 local COR_DOURADO_D = Color3.fromRGB(180, 140, 30)
+local COR_PRETO    = Color3.fromRGB(0, 0, 0)
 
 --=============================================================
 -- ANTI-TP
@@ -625,6 +623,146 @@ local function monitorarSaidaDoVoid()
 end
 
 --=============================================================
+-- 🌤️ CÉUS (mesmo chão do VOID)
+--=============================================================
+local CEU_Y = 5000
+local CEU_CENTRO = Vector3.new(0, CEU_Y, 0)
+local CEU_TAMANHO = 1000
+local ceuPlaceFolder = nil
+local ceuMonitorConn = nil
+local ceuLocalTP = nil
+local ceuForaDesde = nil
+local CEU_TOLERANCIA = 3
+
+local function criarCeuLocalTP(posicao)
+    if ceuLocalTP and ceuLocalTP.Parent then return end
+    local p = Instance.new("Part")
+    p.Name = "RickLocalTP_Ceu"
+    p.Size = Vector3.new(4, 1, 4)
+    p.Position = posicao
+    p.Anchored = true
+    p.CanCollide = false
+    p.CanTouch = false
+    p.CanQuery = false
+    p.Transparency = 1
+    p.Parent = workspace
+    ceuLocalTP = p
+end
+
+local function deletarCeuLocalTP()
+    if ceuLocalTP and ceuLocalTP.Parent then ceuLocalTP:Destroy() end
+    ceuLocalTP = nil
+end
+
+local function criarCeuPlace()
+    if ceuPlaceFolder then return end
+
+    local folder = Instance.new("Folder")
+    folder.Name = "RickCeuPlace"
+    folder.Parent = workspace
+    ceuPlaceFolder = folder
+
+    -- ✅ Chão IGUAL ao Void (Grass verde)
+    local chao = Instance.new("Part")
+    chao.Name = "CeuChao"
+    chao.Size = Vector3.new(CEU_TAMANHO * 2, 4, CEU_TAMANHO * 2)
+    chao.Position = CEU_CENTRO
+    chao.Anchored = true
+    chao.CanCollide = true
+    chao.Material = Enum.Material.Grass
+    chao.Color = Color3.fromRGB(45, 90, 40)
+    chao.Parent = folder
+
+    local borda = Instance.new("Part")
+    borda.Name = "CeuBorda"
+    borda.Size = Vector3.new(CEU_TAMANHO * 2 + 4, 1, CEU_TAMANHO * 2 + 4)
+    borda.Position = CEU_CENTRO + Vector3.new(0, -2.5, 0)
+    borda.Anchored = true
+    borda.CanCollide = false
+    borda.Material = Enum.Material.Neon
+    borda.Color = Color3.fromRGB(50, 255, 130)
+    borda.Transparency = 0.3
+    borda.Parent = folder
+
+    local luzCentral = Instance.new("Part")
+    luzCentral.Name = "CeuLuz"
+    luzCentral.Size = Vector3.new(1, 1, 1)
+    luzCentral.Position = CEU_CENTRO + Vector3.new(0, 200, 0)
+    luzCentral.Anchored = true
+    luzCentral.CanCollide = false
+    luzCentral.Transparency = 1
+    luzCentral.Parent = folder
+
+    local pl = Instance.new("PointLight")
+    pl.Color = Color3.fromRGB(50, 255, 130)
+    pl.Range = 500
+    pl.Brightness = 2
+    pl.Parent = luzCentral
+end
+
+local function deletarCeuPlace()
+    ceuForaDesde = nil
+    if ceuPlaceFolder then
+        ceuPlaceFolder:Destroy()
+        ceuPlaceFolder = nil
+    end
+    if ceuMonitorConn then
+        local conn = ceuMonitorConn
+        ceuMonitorConn = nil
+        conn:Disconnect()
+    end
+end
+
+local function monitorarSaidaDoCeu()
+    if ceuMonitorConn then ceuMonitorConn:Disconnect() end
+
+    ceuMonitorConn = RunService.Heartbeat:Connect(function()
+        if not ceuPlaceFolder then return end
+
+        local char = player.Character
+        if not char then
+            ceuForaDesde = nil
+            return
+        end
+
+        local humanoid = char:FindFirstChildOfClass("Humanoid")
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+
+        if humanoid and humanoid.Health <= 0 then
+            ceuForaDesde = nil
+            task.defer(deletarCeuPlace)
+            task.defer(deletarCeuLocalTP)
+            return
+        end
+
+        local pos = hrp.Position
+        local foraX = math.abs(pos.X) > CEU_TAMANHO + 20
+        local foraZ = math.abs(pos.Z) > CEU_TAMANHO + 20
+        local subiuMuito = pos.Y > CEU_Y + 500
+        local caiuMuito = pos.Y < CEU_Y - 200
+
+        local estaFora = foraX or foraZ or subiuMuito or caiuMuito
+
+        if estaFora then
+            if not ceuForaDesde then
+                ceuForaDesde = tick()
+            end
+
+            if tick() - ceuForaDesde >= CEU_TOLERANCIA then
+                ceuForaDesde = nil
+                task.defer(deletarCeuPlace)
+                task.defer(deletarCeuLocalTP)
+            end
+        else
+            if ceuForaDesde then
+                ceuForaDesde = nil
+            end
+        end
+    end)
+end
+
+--=============================================================
 -- UI SETUP
 --=============================================================
 local screenGui = Instance.new("ScreenGui")
@@ -633,9 +771,9 @@ screenGui.ResetOnSpawn = false
 screenGui.Parent = CoreGui
 
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 100, 0, 300)
-mainFrame.Position = UDim2.new(0, 20, 0.35, -150)
-mainFrame.BackgroundColor3 = COR_BG
+mainFrame.Size = UDim2.new(0, 100, 0, 320)
+mainFrame.Position = UDim2.new(0, 20, 0.35, -160)
+mainFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
 mainFrame.Draggable = true
@@ -677,7 +815,7 @@ fazerCanto(UDim.new(1, 0), UDim.new(1, 0), -10, -10)
 local innerScreen = Instance.new("Frame")
 innerScreen.Size = UDim2.new(1, -8, 1, -8)
 innerScreen.Position = UDim2.new(0, 4, 0, 4)
-innerScreen.BackgroundColor3 = COR_INNER
+innerScreen.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 innerScreen.BorderSizePixel = 0
 innerScreen.ClipsDescendants = false
 innerScreen.Parent = mainFrame
@@ -712,7 +850,7 @@ local titleTag = Instance.new("TextLabel")
 titleTag.Size = UDim2.new(1, -10, 0, 8)
 titleTag.Position = UDim2.new(0, 5, 0, 5)
 titleTag.BackgroundTransparency = 1
-titleTag.Text = "▰ PRIME OS // v33.0"
+titleTag.Text = "▰ PRIME OS // v37.0"
 titleTag.TextColor3 = COR_CIANO
 titleTag.Font = Enum.Font.Code
 titleTag.TextSize = 6
@@ -863,13 +1001,14 @@ end
 local tpPlayerBtn  = createButton("▸ SELECT TARGET", 44, COR_LINHA)
 local clearBtn     = createButton("▸ CLEAR PORTALS", 62, COR_CIANO)
 local voidBtn      = createButton("▸ VOID DIMENSION", 80, COR_VERMELHO)
-local marcacaoBtn  = createButton("▸ MARCAÇÃO [0/2]", 98, Color3.fromRGB(255, 180, 40))
-local permBtn      = createButton("▸ POSIÇÃO PERM [OFF]", 116, COR_DOURADO)
-local antiTPBtn    = createButton("▸ ANTI-TP [OFF]", 134, COR_VERMELHO)
-local antiVoidBtn  = createButton("▸ ANTI-VOID [OFF]", 152, COR_CIANO)
-local minimizarBtn = createButton("▾ MINIMIZAR", 174, COR_CIANO)
-local rejoinBtn    = createButton("↻ REJOIN", 192, COR_DOURADO)
-local closeBtn     = createButton("✕ CLOSE SESSION", 216, COR_VERMELHO)
+local ceusBtn      = createButton("▸ CÉUS", 98, COR_CIANO)
+local marcacaoBtn  = createButton("▸ MARCAÇÃO [0/2]", 116, Color3.fromRGB(255, 180, 40))
+local permBtn      = createButton("▸ POSIÇÃO PERM [OFF]", 134, COR_DOURADO)
+local antiTPBtn    = createButton("▸ ANTI-TP [OFF]", 152, COR_VERMELHO)
+local antiVoidBtn  = createButton("▸ ANTI-VOID [OFF]", 170, COR_CIANO)
+local minimizarBtn = createButton("▾ MINIMIZAR", 192, COR_CIANO)
+local rejoinBtn    = createButton("↻ REJOIN", 210, COR_DOURADO)
+local closeBtn     = createButton("✕ CLOSE SESSION", 234, COR_VERMELHO)
 
 local closeStroke    = closeBtn:FindFirstChildOfClass("UIStroke")
 local voidStroke     = voidBtn:FindFirstChildOfClass("UIStroke")
@@ -879,6 +1018,7 @@ local permStroke     = permBtn:FindFirstChildOfClass("UIStroke")
 local antiVoidStroke = antiVoidBtn:FindFirstChildOfClass("UIStroke")
 local minimizarStroke = minimizarBtn:FindFirstChildOfClass("UIStroke")
 local rejoinStroke    = rejoinBtn:FindFirstChildOfClass("UIStroke")
+local ceusStroke      = ceusBtn:FindFirstChildOfClass("UIStroke")
 
 if voidStroke then
     voidStroke.Color = COR_VERMELHO
@@ -919,6 +1059,33 @@ if rejoinStroke then
     rejoinStroke.Color = COR_DOURADO_D
     rejoinStroke.Transparency = 0.4
 end
+
+-- ✅ Visual do botão CÉUS (fundo preto, letras ciano)
+ceusBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+ceusBtn.BackgroundTransparency = 0
+
+local ceusLbl = ceusBtn:FindFirstChildOfClass("TextLabel")
+if ceusLbl then
+    ceusLbl.TextColor3 = COR_CIANO
+end
+
+if ceusStroke then
+    ceusStroke.Color = COR_CIANO
+    ceusStroke.Transparency = 0.2
+end
+
+local ceusAccent = ceusBtn:FindFirstChild("Frame")
+if ceusAccent and ceusAccent:IsA("Frame") then
+    ceusAccent.BackgroundColor3 = COR_CIANO
+end
+
+ceusBtn.MouseEnter:Connect(function()
+    ceusBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+end)
+
+ceusBtn.MouseLeave:Connect(function()
+    ceusBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+end)
 
 local footerLabel = Instance.new("TextLabel")
 footerLabel.Size = UDim2.new(1, -8, 0, 8)
@@ -1250,7 +1417,7 @@ local function spawnPortalSaida(char)
 end
 
 --=============================================================
--- VOID
+-- VOID (abre)
 --=============================================================
 local function abrirPortalVoid()
     setRandomQuote()
@@ -1351,7 +1518,111 @@ local function abrirPortalVoid()
 end
 
 --=============================================================
--- ✅ MARCAÇÃO v33
+-- 🌤️ CÉUS (abre)
+--=============================================================
+local function abrirPortalCeu()
+    setRandomQuote()
+    wipeAllPortals(true)
+    panelOpen = false
+    tpPlayerBtn:SetAttribute("ActiveState", false)
+    TweenService:Create(
+        slidingPanel,
+        TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+        { Size = UDim2.new(0, 0, 1, 0) }
+    ):Play()
+    tpPlayerBtn.BackgroundColor3 = COR_PANEL
+    local tpLbl = tpPlayerBtn:FindFirstChildOfClass("TextLabel")
+    if tpLbl then tpLbl.TextColor3 = COR_TEXTO end
+
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+
+    criarCeuLocalTP(root.Position)
+
+    local ceuPortal = createPortalInstance(root.CFrame * CFrame.new(0, 0, -5), TAG_VOID)
+    local lblCeu = ceusBtn:FindFirstChildOfClass("TextLabel")
+    if lblCeu then
+        lblCeu.Text = "▸ ENTRAR CÉUS"
+        lblCeu.TextColor3 = COR_CIANO
+    end
+
+    local resetAtivo = true
+    task.delay(15, function()
+        if resetAtivo and ceuPortal and ceuPortal.Parent then
+            if lblCeu then lblCeu.Text = "▸ CÉUS" end
+            fecharPortal(ceuPortal)
+        end
+    end)
+
+    local touched = false
+    ceuPortal.Touched:Connect(function(hit)
+        if touched or hit.Parent ~= char then return end
+        touched = true
+        resetAtivo = false
+
+        playTPSound()
+        efeitoTP()
+
+        task.spawn(function()
+            task.wait(0.2)
+
+            criarCeuPlace()
+            monitorarSaidaDoCeu()
+
+            local destino = CFrame.new(CEU_CENTRO.X, CEU_CENTRO.Y + 5, CEU_CENTRO.Z)
+            if root and root.Parent then
+                root.CFrame = destino
+            end
+
+            task.wait(0.3)
+
+            local portalVolta = createPortalInstance(
+                CFrame.new(CEU_CENTRO.X, CEU_CENTRO.Y + 3, CEU_CENTRO.Z - 8),
+                TAG_RET
+            )
+            if lblCeu then lblCeu.Text = "▸ CÉUS" end
+
+            local voltouTouched = false
+            portalVolta.Touched:Connect(function(hitBack)
+                if voltouTouched or hitBack.Parent ~= char then return end
+                voltouTouched = true
+
+                playTPSound()
+                efeitoTP()
+
+                task.spawn(function()
+                    task.wait(0.2)
+
+                    local currentChar = player.Character
+                    local currentRoot = currentChar and currentChar:FindFirstChild("HumanoidRootPart")
+                    if not currentRoot then return end
+
+                    if ceuLocalTP and ceuLocalTP.Parent then
+                        currentRoot.CFrame = CFrame.new(ceuLocalTP.Position + Vector3.new(0, 5, 0))
+                    else
+                        local spawnLocal = workspace:FindFirstChildOfClass("SpawnLocation")
+                        if spawnLocal then
+                            currentRoot.CFrame = spawnLocal.CFrame + Vector3.new(0, 5, 0)
+                        else
+                            currentRoot.CFrame = CFrame.new(0, 50, 0)
+                        end
+                    end
+
+                    task.wait(0.3)
+
+                    deletarCeuPlace()
+                    deletarCeuLocalTP()
+                    wipePortalsPorTag(TAG_VOID, true)
+                    wipePortalsPorTag(TAG_RET, true)
+                end)
+            end)
+        end)
+    end)
+end
+
+--=============================================================
+-- ✅ MARCAÇÃO v37
 --=============================================================
 local function atualizarLabelMarcacao()
     local lbl = marcacaoBtn:FindFirstChildOfClass("TextLabel")
@@ -1942,10 +2213,11 @@ Players.PlayerRemoving:Connect(function(p)
 end)
 
 voidBtn.MouseButton1Click:Connect(abrirPortalVoid)
+ceusBtn.MouseButton1Click:Connect(abrirPortalCeu)
 marcacaoBtn.MouseButton1Click:Connect(clicarMarcacao)
 
 --=============================================================
--- ✅ PERM BUTTON v33
+-- ✅ PERM BUTTON v37
 --=============================================================
 permBtn.MouseButton1Click:Connect(function()
     setRandomQuote()
@@ -2552,7 +2824,7 @@ antiVoidBtn.MouseButton1Click:Connect(function()
 end)
 
 --=============================================================
--- ✅ CLEAR BUTTON v33
+-- ✅ CLEAR BUTTON v37
 --=============================================================
 clearBtn.MouseButton1Click:Connect(function()
     setRandomQuote()
@@ -2579,13 +2851,12 @@ clearBtn.MouseButton1Click:Connect(function()
 end)
 
 --=============================================================
--- ✅ MINIMIZAR BUTTON v33 — FIX DEFINITIVO
+-- ✅ MINIMIZAR BUTTON v37
 --=============================================================
 local menuMinimizado = false
-local alturaOriginal = 300
+local alturaOriginal = 320
 local alturaMinimizada = 40
 
--- ✅ Função que fecha o player panel
 local function fecharPlayerPanel()
     if panelOpen then
         panelOpen = false
@@ -2601,24 +2872,19 @@ local function fecharPlayerPanel()
     end
 end
 
--- ✅ Lista dos botões que somem ao minimizar (não inclui minimizarBtn)
 local ocultarAoMinimizar = {
-    tpPlayerBtn, clearBtn, voidBtn, marcacaoBtn,
+    tpPlayerBtn, clearBtn, voidBtn, ceusBtn, marcacaoBtn,
     permBtn, antiTPBtn, antiVoidBtn, rejoinBtn, closeBtn
 }
 
 minimizarBtn.MouseButton1Click:Connect(function()
     setRandomQuote()
-
-    -- ✅ FIX: fecha o player panel se estiver aberto
     fecharPlayerPanel()
-
     menuMinimizado = not menuMinimizado
 
     local lbl = minimizarBtn:FindFirstChildOfClass("TextLabel")
 
     if menuMinimizado then
-        -- ========== MINIMIZAR ==========
         if lbl then
             lbl.Text = "▸ EXPANDIR"
             lbl.TextColor3 = COR_CIANO
@@ -2629,7 +2895,6 @@ minimizarBtn.MouseButton1Click:Connect(function()
             minimizarStroke.Transparency = 0.1
         end
 
-        -- Esconde header
         TweenService:Create(titleTag, TweenInfo.new(0.25), { TextTransparency = 1 }):Play()
         TweenService:Create(title, TweenInfo.new(0.25), { TextTransparency = 1 }):Play()
         TweenService:Create(liveDot, TweenInfo.new(0.25), { BackgroundTransparency = 1 }):Play()
@@ -2640,23 +2905,19 @@ minimizarBtn.MouseButton1Click:Connect(function()
         TweenService:Create(statusBar, TweenInfo.new(0.25), { BackgroundTransparency = 1 }):Play()
         TweenService:Create(innerStroke, TweenInfo.new(0.25), { Transparency = 1 }):Play()
 
-        -- ✅ Esconde e DESATIVA os botões (Visible = false garante que não clica)
         for _, btn in ipairs(ocultarAoMinimizar) do
             btn.Visible = false
             btn.Active = false
             btn.Selectable = false
         end
 
-        -- Move minimizarBtn pro topo
         minimizarBtn.Position = UDim2.new(0.05, 0, 0, 10)
 
-        -- Encolhe o painel
         TweenService:Create(mainFrame, TweenInfo.new(0.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
             Size = UDim2.new(0, 100, 0, alturaMinimizada)
         }):Play()
 
     else
-        -- ========== EXPANDIR ==========
         if lbl then
             lbl.Text = "▾ MINIMIZAR"
             lbl.TextColor3 = COR_TEXTO
@@ -2667,7 +2928,6 @@ minimizarBtn.MouseButton1Click:Connect(function()
             minimizarStroke.Transparency = 0.4
         end
 
-        -- Restaura header
         TweenService:Create(titleTag, TweenInfo.new(0.25), { TextTransparency = 0 }):Play()
         TweenService:Create(title, TweenInfo.new(0.25), { TextTransparency = 0 }):Play()
         TweenService:Create(liveDot, TweenInfo.new(0.25), { BackgroundTransparency = 0 }):Play()
@@ -2678,48 +2938,68 @@ minimizarBtn.MouseButton1Click:Connect(function()
         TweenService:Create(statusBar, TweenInfo.new(0.25), { BackgroundTransparency = 0 }):Play()
         TweenService:Create(innerStroke, TweenInfo.new(0.25), { Transparency = 0.4 }):Play()
 
-        -- Devolve a posição do minimizarBtn
-        minimizarBtn.Position = UDim2.new(0.05, 0, 0, 174)
+        minimizarBtn.Position = UDim2.new(0.05, 0, 0, 192)
 
-        -- Expande o painel
         TweenService:Create(mainFrame, TweenInfo.new(0.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
             Size = UDim2.new(0, 100, 0, alturaOriginal)
         }):Play()
 
-        -- ✅ Reativa e mostra os botões
         for _, btn in ipairs(ocultarAoMinimizar) do
             btn.Visible = true
             btn.Active = true
             btn.Selectable = true
 
-            -- Restaura transparências originais
-            local transOriginal = 0.15
-            local strokeTransOriginal = 0.5
+            if btn == ceusBtn then
+                btn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+                btn.BackgroundTransparency = 0
 
-            if btn == closeBtn then
-                strokeTransOriginal = 0.2
-            elseif btn == voidBtn then
-                strokeTransOriginal = 0.3
-            elseif btn == antiTPBtn or btn == marcacaoBtn or btn == permBtn or btn == antiVoidBtn or btn == rejoinBtn then
-                strokeTransOriginal = 0.4
-            end
+                local l = btn:FindFirstChildOfClass("TextLabel")
+                if l then
+                    l.TextTransparency = 0
+                    l.TextColor3 = COR_CIANO
+                end
 
-            btn.BackgroundTransparency = transOriginal
-            btn.BackgroundColor3 = COR_PANEL
+                local st = btn:FindFirstChildOfClass("UIStroke")
+                if st then
+                    st.Transparency = 0.2
+                    st.Color = COR_CIANO
+                end
 
-            local l = btn:FindFirstChildOfClass("TextLabel")
-            if l then
-                l.TextTransparency = 0
-            end
+                local a = btn:FindFirstChild("Frame")
+                if a and a:IsA("Frame") then
+                    a.BackgroundTransparency = 0
+                    a.BackgroundColor3 = COR_CIANO
+                end
+            else
+                local transOriginal = 0.15
+                local strokeTransOriginal = 0.5
 
-            local st = btn:FindFirstChildOfClass("UIStroke")
-            if st then
-                st.Transparency = strokeTransOriginal
-            end
+                if btn == closeBtn then
+                    strokeTransOriginal = 0.2
+                elseif btn == voidBtn then
+                    strokeTransOriginal = 0.3
+                elseif btn == antiTPBtn or btn == marcacaoBtn or btn == permBtn or btn == antiVoidBtn or btn == rejoinBtn then
+                    strokeTransOriginal = 0.4
+                end
 
-            local a = btn:FindFirstChild("Frame")
-            if a and a:IsA("Frame") then
-                a.BackgroundTransparency = 0
+                btn.BackgroundTransparency = transOriginal
+                btn.BackgroundColor3 = COR_PANEL
+
+                local l = btn:FindFirstChildOfClass("TextLabel")
+                if l then
+                    l.TextTransparency = 0
+                    l.TextColor3 = COR_TEXTO
+                end
+
+                local st = btn:FindFirstChildOfClass("UIStroke")
+                if st then
+                    st.Transparency = strokeTransOriginal
+                end
+
+                local a = btn:FindFirstChild("Frame")
+                if a and a:IsA("Frame") then
+                    a.BackgroundTransparency = 0
+                end
             end
         end
     end
@@ -2774,6 +3054,8 @@ local function fullCleanup()
 
     deletarVoidPlace()
     deletarLocalTP()
+    deletarCeuPlace()
+    deletarCeuLocalTP()
 
     limparMarcacao(true)
 
@@ -2804,11 +3086,11 @@ closeBtn.MouseButton1Click:Connect(function()
     local slideOutTween = TweenService:Create(
         mainFrame,
         TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.In),
-        { Position = UDim2.new(0, -150, 0.35, -150) }
+        { Position = UDim2.new(0, -150, 0.35, -160) }
     )
     slideOutTween:Play()
     slideOutTween.Completed:Wait()
     fullCleanup()
 end)
 
-print("✅ Prime Rick Portal GUI v33 — Minimizar corrigido 🎯")
+print("✅ Prime Rick Portal GUI v37 — CÉUS com chão igual ao VOID 🌤️")
