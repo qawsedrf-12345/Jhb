@@ -1,11 +1,11 @@
 --=============================================================
--- RICK PRIME v43 — UNIVERSAL / DELTA COMPATIBLE
+-- RICK PRIME v44 — ULTRA VISUAL EDITION
 -- Portal GUI + Marcação + Anti-TP + Anti-Void
--- v43: Compatibilidade máxima com todos executores
+-- Delta Compatible + Efeitos cinematográficos
 --=============================================================
 
 --=============================================================
--- ⚡ 1) GETGENV SEGURO (Delta às vezes falha)
+-- ⚡ GETGENV SEGURO
 --=============================================================
 local genv
 do
@@ -21,46 +21,46 @@ do
     end
 end
 
---=============================================================
--- ⚡ 2) CLEANUP ANTERIOR
---=============================================================
 if genv.RickPortalCleanup then pcall(genv.RickPortalCleanup) end
 genv.AntiTP_Ativo = false
 genv.Marcacao_Ativo = false
 
 --=============================================================
--- ⚡ 3) SERVICES (carregamento tolerante)
+-- ⚡ SERVICES
 --=============================================================
-local Players        = game:GetService("Players")
-local TweenService   = game:GetService("TweenService")
+local Players          = game:GetService("Players")
+local TweenService     = game:GetService("TweenService")
 local CollectionService = game:GetService("CollectionService")
-local SoundService   = game:GetService("SoundService")
-local Lighting       = game:GetService("Lighting")
-local RunService     = game:GetService("RunService")
-local TeleportService = game:GetService("TeleportService")
-local player         = Players.LocalPlayer
+local SoundService     = game:GetService("SoundService")
+local Lighting         = game:GetService("Lighting")
+local RunService       = game:GetService("RunService")
+local TeleportService  = game:GetService("TeleportService")
+local player           = Players.LocalPlayer
 
--- Se o player não existe ainda, espera
 if not player then
     player = Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
     player = Players.LocalPlayer
 end
 
+-- Limpa efeitos antigos
+for _, fx in ipairs(Lighting:GetChildren()) do
+    if fx.Name:sub(1, 3) == "RP_" then
+        pcall(function() fx:Destroy() end)
+    end
+end
+
 --=============================================================
--- ⚡ 4) PARENT DO GUI — FALLBACK AGRESSIVO PARA DELTA
+-- ⚡ GUI PARENT (fallback triplo)
 --=============================================================
 local GUI_PARENT
 do
-    -- Tenta gethui primeiro (executores modernos)
     local ok1, hui = pcall(function()
         if gethui then return gethui() end
     end)
     if ok1 and hui and typeof(hui) == "Instance" then
         GUI_PARENT = hui
-        print("[RickPrime] Usando gethui()")
     end
 
-    -- Tenta CoreGui com teste de escrita
     if not GUI_PARENT then
         local ok2, cg = pcall(function() return game:GetService("CoreGui") end)
         if ok2 and cg then
@@ -70,23 +70,18 @@ do
                 test.Parent = cg
                 test:Destroy()
             end)
-            if ok3 then
-                GUI_PARENT = cg
-                print("[RickPrime] Usando CoreGui")
-            end
+            if ok3 then GUI_PARENT = cg end
         end
     end
 
-    -- ✅ FALLBACK FINAL: PlayerGui (SEMPRE funciona no Delta)
     if not GUI_PARENT then
         local ok4, pg = pcall(function()
             return player:WaitForChild("PlayerGui", 10)
         end)
         if ok4 and pg then
             GUI_PARENT = pg
-            print("[RickPrime] Usando PlayerGui (fallback Delta)")
         else
-            warn("[RickPrime] ❌ Não foi possível obter parent do GUI!")
+            warn("[RickPrime] ❌ Sem parent do GUI!")
             return
         end
     end
@@ -106,23 +101,12 @@ local TP_RANDOM_AUDIO_IDS = {
 }
 
 local AV = {
-    LocalSeguroDuracao = 5,
-    TempoCaindoLimite  = 0.2,
-    TempoCaindoNormal  = 0.4,
-    OffsetY            = 3,
-    DuracaoDesativado  = 3,
-    VelocidadeMinimaCaindo = -25,
-    RaioInicial    = 5,
-    RaioIncremento = 5,
-    RaioMaximo     = 3000,
-    RaioMaximoBusca = 200,
-    PassosPorAnel  = 20,
-    AlturaAcima    = 150,
-    AlturaAbaixo   = 500,
-    DotMinimoPisavel = 0.6,
-    ToleranciaY = 3,
-    MortesLimite    = 2,
-    JanelaMortes    = 30,
+    LocalSeguroDuracao = 5, TempoCaindoLimite = 0.2, TempoCaindoNormal = 0.4,
+    OffsetY = 3, DuracaoDesativado = 3, VelocidadeMinimaCaindo = -25,
+    RaioInicial = 5, RaioIncremento = 5, RaioMaximo = 3000,
+    RaioMaximoBusca = 200, PassosPorAnel = 20, AlturaAcima = 150,
+    AlturaAbaixo = 500, DotMinimoPisavel = 0.6, ToleranciaY = 3,
+    MortesLimite = 2, JanelaMortes = 30,
 }
 
 local TAG_GEN   = "RP_Gen_"   .. player.UserId
@@ -138,7 +122,7 @@ local marcacaoP1, marcacaoP2 = nil, nil
 local marcacaoConns = {}
 
 --=============================================================
--- PALETA
+-- 🎨 PALETA EXPANDIDA
 --=============================================================
 local COR_BG        = Color3.fromRGB(8, 10, 9)
 local COR_PANEL     = Color3.fromRGB(15, 18, 16)
@@ -152,18 +136,26 @@ local COR_TEXTO_D   = Color3.fromRGB(80, 140, 90)
 local COR_GLOW      = Color3.fromRGB(0, 255, 130)
 local COR_DOURADO   = Color3.fromRGB(255, 200, 50)
 local COR_DOURADO_D = Color3.fromRGB(180, 140, 30)
+local COR_ROXO      = Color3.fromRGB(160, 80, 255)
+local COR_OURO      = Color3.fromRGB(255, 230, 120)
+local COR_ROSA      = Color3.fromRGB(255, 100, 180)
 
 --=============================================================
 -- ATP config
 --=============================================================
-local ATP = {
-    DistanciaMax = 5,
-    Cooldown = 0.2,
-    OffsetY = 3,
-    IgnorarJanela = 1.5,
-}
-
+local ATP = { DistanciaMax = 5, Cooldown = 0.2, OffsetY = 3, IgnorarJanela = 1.5 }
 local atpUltPos, atpUltimoCheck, atpCooldown, atpUltimoRespawn = nil, 0, false, 0
+
+--=============================================================
+-- ✨ COLOR CORRECTION (dá tinta cinematográfica)
+--=============================================================
+local ccEffect = Instance.new("ColorCorrectionEffect")
+ccEffect.Name = "RP_ColorCorrection"
+ccEffect.Saturation = 0
+ccEffect.Contrast = 0
+ccEffect.Brightness = 0
+ccEffect.TintColor = Color3.fromRGB(255, 255, 255)
+ccEffect.Parent = Lighting
 
 --=============================================================
 -- FX GUI
@@ -206,8 +198,121 @@ particulasContainer.BackgroundTransparency = 1
 particulasContainer.ZIndex = 1005
 particulasContainer.Parent = fxGui
 
+local streaksContainer = Instance.new("Frame")
+streaksContainer.Name = "Streaks"
+streaksContainer.Size = UDim2.new(1, 0, 1, 0)
+streaksContainer.BackgroundTransparency = 1
+streaksContainer.ZIndex = 1004
+streaksContainer.Parent = fxGui
+
 --=============================================================
--- BLUR / FLASH
+-- ✨ HELPERS VISUAIS
+--=============================================================
+local function criarGradiente(parent, c1, c2, rotacao, transparencia)
+    local grad = Instance.new("UIGradient")
+    grad.Color = ColorSequence.new(c1, c2)
+    grad.Rotation = rotacao or 0
+    if transparencia then
+        grad.Transparency = transparencia
+    end
+    grad.Parent = parent
+    return grad
+end
+
+-- ✨ Brilho pulsante no stroke
+local function criarBrilhoPulsante(parent, cor, minMs, maxMs)
+    task.spawn(function()
+        local stroke = parent:FindFirstChildOfClass("UIStroke")
+        if not stroke then return end
+        local corOriginal = stroke.Color
+        local transOriginal = stroke.Transparency
+        while parent and parent.Parent do
+            TweenService:Create(stroke, TweenInfo.new(math.random(minMs, maxMs) / 100, Enum.EasingStyle.Sine), {
+                Transparency = math.max(0, transOriginal - 0.3),
+                Color = cor
+            }):Play()
+            task.wait(math.random(minMs, maxMs) / 100)
+            if not (parent and parent.Parent) then break end
+            TweenService:Create(stroke, TweenInfo.new(math.random(minMs, maxMs) / 100, Enum.EasingStyle.Sine), {
+                Transparency = transOriginal,
+                Color = corOriginal
+            }):Play()
+            task.wait(math.random(minMs, maxMs) / 100)
+        end
+    end)
+end
+
+-- ✨ Partículas flutuando DENTRO do menu
+local function criarParticulasFlutuantes(container, quantidade, cor)
+    task.spawn(function()
+        while container and container.Parent do
+            for _ = 1, quantidade do
+                task.spawn(function()
+                    if not (container and container.Parent) then return end
+                    local p = Instance.new("Frame")
+                    p.Size = UDim2.new(0, math.random(1, 3), 0, math.random(1, 3))
+                    p.Position = UDim2.new(math.random(), 0, 1, 0)
+                    p.BackgroundColor3 = cor
+                    p.BackgroundTransparency = math.random(20, 70) / 100
+                    p.BorderSizePixel = 0
+                    p.ZIndex = 2
+                    p.Parent = container
+
+                    local c = Instance.new("UICorner")
+                    c.CornerRadius = UDim.new(1, 0)
+                    c.Parent = p
+
+                    local tempo = math.random(40, 90) / 10
+                    local destino = UDim2.new(p.Position.X.Scale, 0, -0.1, 0)
+                    local tw = TweenService:Create(p, TweenInfo.new(tempo, Enum.EasingStyle.Linear), {
+                        Position = destino,
+                        BackgroundTransparency = 1
+                    })
+                    tw:Play()
+                    tw.Completed:Wait()
+                    if p and p.Parent then p:Destroy() end
+                end)
+                task.wait(0.15)
+            end
+            task.wait(0.3)
+        end
+    end)
+end
+
+-- ✨ Scanline animada
+local function criarScanline(parent, cor)
+    task.spawn(function()
+        while parent and parent.Parent do
+            local linha = Instance.new("Frame")
+            linha.Size = UDim2.new(1, 0, 0, 1)
+            linha.Position = UDim2.new(0, 0, 0, 0)
+            linha.BackgroundColor3 = cor
+            linha.BackgroundTransparency = 0.4
+            linha.BorderSizePixel = 0
+            linha.ZIndex = 10
+            linha.Parent = parent
+
+            local grad = Instance.new("UIGradient")
+            grad.Transparency = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 1),
+                NumberSequenceKeypoint.new(0.5, 0),
+                NumberSequenceKeypoint.new(1, 1)
+            })
+            grad.Parent = linha
+
+            local tw = TweenService:Create(linha, TweenInfo.new(2.5, Enum.EasingStyle.Linear), {
+                Position = UDim2.new(0, 0, 1, 0),
+                BackgroundTransparency = 1
+            })
+            tw:Play()
+            task.wait(2.7)
+            if linha and linha.Parent then linha:Destroy() end
+        end
+    end)
+end
+
+--=============================================================
+-- BLUR / FLASH / PULSO
 --=============================================================
 local blurEffect = nil
 local blurTween = nil
@@ -258,9 +363,28 @@ local function alertaVermelho()
     ):Play()
 end
 
-local MAX_PARTICULAS = 40
+-- ✨ Pulso de cor cinematográfico
+local function pulsoCor(cor, duracao)
+    TweenService:Create(ccEffect, TweenInfo.new(0.08, Enum.EasingStyle.Quad), {
+        Saturation = 0.5,
+        Contrast = 0.3,
+        TintColor = cor
+    }):Play()
+    task.delay(0.08, function()
+        TweenService:Create(ccEffect, TweenInfo.new(duracao or 0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            Saturation = 0,
+            Contrast = 0,
+            TintColor = Color3.fromRGB(255, 255, 255)
+        }):Play()
+    end)
+end
+
+local MAX_PARTICULAS = 60
 local particulasAtivas = 0
 
+--=============================================================
+-- ✨ ONDAS (duplas: stroke colorido + branco fino)
+--=============================================================
 local function efeitoOndas(quantidade, duracao, cor)
     task.spawn(function()
         for _ = 1, quantidade do
@@ -280,15 +404,24 @@ local function efeitoOndas(quantidade, duracao, cor)
 
                 local s = Instance.new("UIStroke")
                 s.Color = cor
-                s.Thickness = 5
-                s.Transparency = 0.3
+                s.Thickness = 6
+                s.Transparency = 0.2
                 s.Parent = ondaFrame
 
+                local s2 = Instance.new("UIStroke")
+                s2.Color = Color3.fromRGB(255, 255, 255)
+                s2.Thickness = 2
+                s2.Transparency = 0.6
+                s2.Parent = ondaFrame
+
                 TweenService:Create(ondaFrame, TweenInfo.new(duracao, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-                    Size = UDim2.new(3, 0, 3, 0)
+                    Size = UDim2.new(3.5, 0, 3.5, 0)
                 }):Play()
                 TweenService:Create(s, TweenInfo.new(duracao, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
                     Transparency = 1, Thickness = 1
+                }):Play()
+                TweenService:Create(s2, TweenInfo.new(duracao, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                    Transparency = 1, Thickness = 0
                 }):Play()
 
                 task.wait(duracao)
@@ -299,7 +432,11 @@ local function efeitoOndas(quantidade, duracao, cor)
     end)
 end
 
-local function efeitoParticulas(quantidade, cor)
+--=============================================================
+-- ✨ PARTÍCULAS (com glow duplo)
+--=============================================================
+local function efeitoParticulas(quantidade, cor, tamMax)
+    tamMax = tamMax or 8
     task.spawn(function()
         for _ = 1, quantidade do
             if particulasAtivas >= MAX_PARTICULAS then break end
@@ -307,11 +444,12 @@ local function efeitoParticulas(quantidade, cor)
 
             task.spawn(function()
                 local part = Instance.new("Frame")
-                part.Size = UDim2.new(0, math.random(3, 8), 0, math.random(3, 8))
+                local tam = math.random(3, tamMax)
+                part.Size = UDim2.new(0, tam, 0, tam)
                 part.Position = UDim2.new(0.5, 0, 0.5, 0)
                 part.AnchorPoint = Vector2.new(0.5, 0.5)
                 part.BackgroundColor3 = cor
-                part.BackgroundTransparency = math.random(10, 40) / 100
+                part.BackgroundTransparency = math.random(5, 35) / 100
                 part.BorderSizePixel = 0
                 part.ZIndex = 1005
                 part.Parent = particulasContainer
@@ -320,18 +458,74 @@ local function efeitoParticulas(quantidade, cor)
                 c.CornerRadius = UDim.new(1, 0)
                 c.Parent = part
 
+                -- Glow em volta
+                local glow = Instance.new("Frame")
+                glow.Size = UDim2.new(2, 0, 2, 0)
+                glow.Position = UDim2.new(0.5, 0, 0.5, 0)
+                glow.AnchorPoint = Vector2.new(0.5, 0.5)
+                glow.BackgroundColor3 = cor
+                glow.BackgroundTransparency = 0.7
+                glow.BorderSizePixel = 0
+                glow.ZIndex = 1004
+                glow.Parent = part
+
+                local gc = Instance.new("UICorner")
+                gc.CornerRadius = UDim.new(1, 0)
+                gc.Parent = glow
+
                 local angulo = math.random() * math.pi * 2
-                local distancia = math.random(80, 150) / 100
-                local tw = TweenService:Create(part, TweenInfo.new(math.random(40, 70) / 100, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                local distancia = math.random(80, 180) / 100
+                local tw = TweenService:Create(part, TweenInfo.new(math.random(40, 80) / 100, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
                     Position = UDim2.new(0.5 + math.cos(angulo) * distancia, 0, 0.5 + math.sin(angulo) * distancia, 0),
                     BackgroundTransparency = 1,
                     Size = UDim2.new(0, 0, 0, 0)
                 })
+                TweenService:Create(glow, TweenInfo.new(math.random(40, 80) / 100, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                    BackgroundTransparency = 1,
+                    Size = UDim2.new(0, 0, 0, 0)
+                }):Play()
                 tw:Play()
                 tw.Completed:Wait()
                 if part and part.Parent then part:Destroy() end
                 particulasAtivas = math.max(0, particulasAtivas - 1)
             end)
+        end
+    end)
+end
+
+-- ✨ Streaks (linhas rápidas passando pela tela)
+local function efeitoStreaks(quantidade, cor)
+    task.spawn(function()
+        for _ = 1, quantidade do
+            task.spawn(function()
+                local streak = Instance.new("Frame")
+                streak.Size = UDim2.new(0, math.random(2, 4), 0, math.random(80, 200))
+                streak.Position = UDim2.new(math.random(), 0, -0.3, 0)
+                streak.BackgroundColor3 = cor
+                streak.BackgroundTransparency = 0.3
+                streak.BorderSizePixel = 0
+                streak.ZIndex = 1004
+                streak.Rotation = math.random(-30, 30)
+                streak.Parent = streaksContainer
+
+                local grad = Instance.new("UIGradient")
+                grad.Rotation = 90
+                grad.Transparency = NumberSequence.new({
+                    NumberSequenceKeypoint.new(0, 1),
+                    NumberSequenceKeypoint.new(0.5, 0),
+                    NumberSequenceKeypoint.new(1, 1)
+                })
+                grad.Parent = streak
+
+                local tw = TweenService:Create(streak, TweenInfo.new(math.random(30, 60) / 100, Enum.EasingStyle.Linear), {
+                    Position = UDim2.new(streak.Position.X.Scale, 0, 1.3, 0),
+                    BackgroundTransparency = 1
+                })
+                tw:Play()
+                tw.Completed:Wait()
+                if streak and streak.Parent then streak:Destroy() end
+            end)
+            task.wait(0.02)
         end
     end)
 end
@@ -374,25 +568,21 @@ local function playRandomTPSound()
     s.SoundId = escolhido.id
     s.Volume = 3
     s.Parent = SoundService
-
     task.spawn(function()
         local inicio = os.clock()
-        while not s.IsLoaded and os.clock() - inicio < 3 do
-            task.wait(0.05)
-        end
+        while not s.IsLoaded and os.clock() - inicio < 3 do task.wait(0.05) end
         if s and s.Parent then
             if escolhido.startAt > 0 then s.TimePosition = escolhido.startAt end
             s:Play()
         end
     end)
-
     task.delay(15, function()
         if s and s.Parent then s:Destroy() end
     end)
 end
 
 --=============================================================
--- EFEITO TP
+-- ✨ EFEITO TP ULTRA
 --=============================================================
 local COR_TP = Color3.fromRGB(50, 255, 130)
 local efeitoTPRefs = 0
@@ -407,28 +597,31 @@ local function efeitoTP()
 
     task.spawn(function()
         fadeFrame.BackgroundColor3 = COR_TP
-        fadeFrame.BackgroundTransparency = 0.5
+        fadeFrame.BackgroundTransparency = 0.4
 
         task.wait(0.04)
         flashTela(Color3.fromRGB(255, 255, 255), 0.18)
+        pulsoCor(COR_TP, 0.5)
 
-        TweenService:Create(fadeFrame, TweenInfo.new(0.55, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        TweenService:Create(fadeFrame, TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
             BackgroundTransparency = 1
         }):Play()
 
-        efeitoOndas(3, 0.6, COR_TP)
-        efeitoParticulas(50, COR_TP)
-        cameraShake(1.2, 0.25)
-        criarBlur(8)
-        removerBlur(0.4)
+        efeitoOndas(4, 0.7, COR_TP)
+        efeitoParticulas(70, COR_TP, 10)
+        efeitoParticulas(20, Color3.fromRGB(255, 255, 255), 6)
+        efeitoStreaks(8, COR_TP)
+        cameraShake(1.5, 0.3)
+        criarBlur(10)
+        removerBlur(0.45)
 
-        task.wait(0.6)
+        task.wait(0.7)
         efeitoTPRefs = 0
     end)
 end
 
 --=============================================================
--- FECHAR PORTAL
+-- FECHAR PORTAL (com explosão de partículas)
 --=============================================================
 local function fecharPortal(portalPart)
     if not portalPart or not portalPart.Parent then return end
@@ -440,6 +633,23 @@ local function fecharPortal(portalPart)
 
     for _, emitter in ipairs(portalPart:GetChildren()) do
         if emitter:IsA("ParticleEmitter") then emitter.Enabled = false end
+        if emitter:IsA("Light") then
+            pcall(function()
+                TweenService:Create(emitter, TweenInfo.new(0.35), {Brightness = 0}):Play()
+            end)
+        end
+    end
+
+    -- Limpa elementos extras
+    for _, filho in ipairs(portalPart:GetChildren()) do
+        if filho.Name == "RingRotativo" or filho.Name == "LightBeam" then
+            pcall(function()
+                if filho:IsA("BasePart") then
+                    TweenService:Create(filho, TweenInfo.new(0.4), {Transparency = 1}):Play()
+                    task.delay(0.4, function() if filho and filho.Parent then filho:Destroy() end end)
+                end
+            end)
+        end
     end
 
     local somLoop = portalPart:FindFirstChild("PortalLoopSound")
@@ -449,10 +659,42 @@ local function fecharPortal(portalPart)
         end)
     end
 
-    local DUR = 0.45
+    local DUR = 0.5
     local cframeInicial = portalPart.CFrame
 
-    TweenService:Create(portalPart, TweenInfo.new(DUR, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {Size = Vector3.new(0, 0, 0.01)}):Play()
+    TweenService:Create(portalPart, TweenInfo.new(DUR, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+        Size = Vector3.new(0, 0, 0.01)
+    }):Play()
+
+    -- ✨ Explosão de partículas no fechamento
+    task.spawn(function()
+        local pAux = Instance.new("Part")
+        pAux.Anchored = true
+        pAux.CanCollide = false
+        pAux.Transparency = 1
+        pAux.Size = Vector3.new(1, 1, 1)
+        pAux.CFrame = cframeInicial
+        pAux.Parent = workspace
+
+        local pe = Instance.new("ParticleEmitter")
+        pe.Color = ColorSequence.new(COR_LINHA, Color3.fromRGB(255, 255, 255))
+        pe.Lifetime = NumberRange.new(0.3, 0.7)
+        pe.Rate = 0
+        pe.Speed = NumberRange.new(10, 20)
+        pe.SpreadAngle = Vector2.new(360, 360)
+        pe.Size = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.6),
+            NumberSequenceKeypoint.new(1, 0)
+        })
+        pe.Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0),
+            NumberSequenceKeypoint.new(1, 1)
+        })
+        pe.LightEmission = 1
+        pe.Parent = pAux
+        pe:Emit(30)
+        task.delay(1, function() if pAux and pAux.Parent then pAux:Destroy() end end)
+    end)
 
     task.spawn(function()
         local inicio = os.clock()
@@ -473,14 +715,12 @@ end
 local function wipePortalsPorTag(tag, comEfeito)
     local portais = {}
     local vistos = {}
-
     for _, p in ipairs(CollectionService:GetTagged(tag)) do
         if p and not vistos[p] then
             vistos[p] = true
             table.insert(portais, p)
         end
     end
-
     if comEfeito then
         for _, p in ipairs(portais) do
             if p and p.Parent then fecharPortal(p) end
@@ -491,7 +731,6 @@ local function wipePortalsPorTag(tag, comEfeito)
             if p and p.Parent then p:Destroy() end
         end
     end
-
     return #portais
 end
 
@@ -570,7 +809,9 @@ local function deletarCeuLocalTP()
     ceuLocalTP = nil
 end
 
-local function criarPlaceFolder(nome, centro, tamanho)
+-- ✨ Place Folder ULTRA (borda neon dupla + anel + partículas)
+local function criarPlaceFolder(nome, centro, tamanho, corBase)
+    corBase = corBase or COR_LINHA
     local folder = Instance.new("Folder")
     folder.Name = nome
     folder.Parent = workspace
@@ -585,6 +826,7 @@ local function criarPlaceFolder(nome, centro, tamanho)
     chao.Color = Color3.fromRGB(45, 90, 40)
     chao.Parent = folder
 
+    -- Borda neon
     local borda = Instance.new("Part")
     borda.Name = "Borda"
     borda.Size = Vector3.new(tamanho * 2 + 4, 1, tamanho * 2 + 4)
@@ -592,10 +834,43 @@ local function criarPlaceFolder(nome, centro, tamanho)
     borda.Anchored = true
     borda.CanCollide = false
     borda.Material = Enum.Material.Neon
-    borda.Color = Color3.fromRGB(50, 255, 130)
-    borda.Transparency = 0.3
+    borda.Color = corBase
+    borda.Transparency = 0.2
     borda.Parent = folder
 
+    -- Borda fina extra
+    local borda2 = Instance.new("Part")
+    borda2.Name = "Borda2"
+    borda2.Size = Vector3.new(tamanho * 2 + 8, 0.5, tamanho * 2 + 8)
+    borda2.Position = centro + Vector3.new(0, -1.5, 0)
+    borda2.Anchored = true
+    borda2.CanCollide = false
+    borda2.Material = Enum.Material.Neon
+    borda2.Color = Color3.fromRGB(255, 255, 255)
+    borda2.Transparency = 0.7
+    borda2.Parent = folder
+
+    -- Anel rotativo
+    local anel = Instance.new("Part")
+    anel.Name = "AnelRotativo"
+    anel.Shape = Enum.PartType.Cylinder
+    anel.Size = Vector3.new(0.3, tamanho * 2 + 2, tamanho * 2 + 2)
+    anel.CFrame = CFrame.new(centro + Vector3.new(0, 5, 0)) * CFrame.Angles(0, 0, math.rad(90))
+    anel.Anchored = true
+    anel.CanCollide = false
+    anel.Material = Enum.Material.Neon
+    anel.Color = corBase
+    anel.Transparency = 0.5
+    anel.Parent = folder
+
+    task.spawn(function()
+        while anel and anel.Parent do
+            anel.CFrame = anel.CFrame * CFrame.Angles(math.rad(1), 0, 0)
+            task.wait(0.03)
+        end
+    end)
+
+    -- Luz central
     local luz = Instance.new("Part")
     luz.Name = "Luz"
     luz.Size = Vector3.new(1, 1, 1)
@@ -606,17 +881,43 @@ local function criarPlaceFolder(nome, centro, tamanho)
     luz.Parent = folder
 
     local pl = Instance.new("PointLight")
-    pl.Color = Color3.fromRGB(50, 255, 130)
+    pl.Color = corBase
     pl.Range = 500
-    pl.Brightness = 2
+    pl.Brightness = 3
     pl.Parent = luz
+
+    -- Partículas subindo constantemente
+    local emitterP = Instance.new("Part")
+    emitterP.Size = Vector3.new(1, 1, 1)
+    emitterP.Position = centro + Vector3.new(0, 30, 0)
+    emitterP.Anchored = true
+    emitterP.CanCollide = false
+    emitterP.Transparency = 1
+    emitterP.Parent = folder
+
+    local pe = Instance.new("ParticleEmitter")
+    pe.Color = ColorSequence.new(corBase)
+    pe.Lifetime = NumberRange.new(2, 4)
+    pe.Rate = 40
+    pe.Speed = NumberRange.new(15, 30)
+    pe.SpreadAngle = Vector2.new(15, 15)
+    pe.Size = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0.4),
+        NumberSequenceKeypoint.new(1, 0)
+    })
+    pe.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0.2),
+        NumberSequenceKeypoint.new(1, 1)
+    })
+    pe.LightEmission = 1
+    pe.Parent = emitterP
 
     return folder
 end
 
 local function criarVoidPlace()
     if voidPlaceFolder then return end
-    voidPlaceFolder = criarPlaceFolder("RickVoidPlace", VOID_CENTRO, VOID_TAMANHO)
+    voidPlaceFolder = criarPlaceFolder("RickVoidPlace", VOID_CENTRO, VOID_TAMANHO, COR_ROXO)
 end
 
 local function deletarVoidPlace()
@@ -633,7 +934,7 @@ end
 
 local function criarCeuPlace()
     if ceuPlaceFolder then return end
-    ceuPlaceFolder = criarPlaceFolder("RickCeuPlace", CEU_CENTRO, CEU_TAMANHO)
+    ceuPlaceFolder = criarPlaceFolder("RickCeuPlace", CEU_CENTRO, CEU_TAMANHO, COR_CIANO)
 end
 
 local function deletarCeuPlace()
@@ -650,94 +951,68 @@ end
 
 local function monitorarSaidaDoVoid()
     if voidMonitorConn then voidMonitorConn:Disconnect() end
-
     voidMonitorConn = RunService.Heartbeat:Connect(function()
         if not voidPlaceFolder then return end
-
         local char = player.Character
-        if not char then
-            voidForaDesde = nil
-            return
-        end
-
+        if not char then voidForaDesde = nil return end
         local humanoid = char:FindFirstChildOfClass("Humanoid")
         local hrp = char:FindFirstChild("HumanoidRootPart")
         if not hrp then return end
-
         if humanoid and humanoid.Health <= 0 then
             voidForaDesde = nil
             task.defer(deletarVoidPlace)
             task.defer(deletarLocalTP)
             return
         end
-
         local pos = hrp.Position
         local estaFora = math.abs(pos.X) > VOID_TAMANHO + 20
             or math.abs(pos.Z) > VOID_TAMANHO + 20
             or pos.Y < VOID_Y - 100
             or pos.Y > VOID_Y + 500
-
         if estaFora then
-            if not voidForaDesde then
-                voidForaDesde = os.clock()
-            end
+            if not voidForaDesde then voidForaDesde = os.clock() end
             if os.clock() - voidForaDesde >= VOID_TOLERANCIA then
                 voidForaDesde = nil
                 task.defer(deletarVoidPlace)
                 task.defer(deletarLocalTP)
             end
-        else
-            voidForaDesde = nil
-        end
+        else voidForaDesde = nil end
     end)
 end
 
 local function monitorarSaidaDoCeu()
     if ceuMonitorConn then ceuMonitorConn:Disconnect() end
-
     ceuMonitorConn = RunService.Heartbeat:Connect(function()
         if not ceuPlaceFolder then return end
-
         local char = player.Character
-        if not char then
-            ceuForaDesde = nil
-            return
-        end
-
+        if not char then ceuForaDesde = nil return end
         local humanoid = char:FindFirstChildOfClass("Humanoid")
         local hrp = char:FindFirstChild("HumanoidRootPart")
         if not hrp then return end
-
         if humanoid and humanoid.Health <= 0 then
             ceuForaDesde = nil
             task.defer(deletarCeuPlace)
             task.defer(deletarCeuLocalTP)
             return
         end
-
         local pos = hrp.Position
         local estaFora = math.abs(pos.X) > CEU_TAMANHO + 20
             or math.abs(pos.Z) > CEU_TAMANHO + 20
             or pos.Y > CEU_Y + 500
             or pos.Y < CEU_Y - 200
-
         if estaFora then
-            if not ceuForaDesde then
-                ceuForaDesde = os.clock()
-            end
+            if not ceuForaDesde then ceuForaDesde = os.clock() end
             if os.clock() - ceuForaDesde >= CEU_TOLERANCIA then
                 ceuForaDesde = nil
                 task.defer(deletarCeuPlace)
                 task.defer(deletarCeuLocalTP)
             end
-        else
-            ceuForaDesde = nil
-        end
+        else ceuForaDesde = nil end
     end)
 end
 
 --=============================================================
--- ⚡ UI — FRAME PRINCIPAL (Delta-safe)
+-- ✨ UI PRINCIPAL ULTRA
 --=============================================================
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "RickPortalGUI"
@@ -747,12 +1022,10 @@ screenGui.DisplayOrder = 999999
 screenGui.Enabled = true
 screenGui.Parent = GUI_PARENT
 
-print("[RickPrime] ✅ ScreenGui criado em:", GUI_PARENT:GetFullName())
-
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 100, 0, 320)
-mainFrame.Position = UDim2.new(0, 20, 0.35, -160)
+mainFrame.Size = UDim2.new(0, 110, 0, 340)
+mainFrame.Position = UDim2.new(0, 20, 0.35, -170)
 mainFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 mainFrame.BackgroundTransparency = 0
 mainFrame.BorderSizePixel = 0
@@ -761,79 +1034,132 @@ mainFrame.Draggable = true
 mainFrame.Visible = true
 mainFrame.Parent = screenGui
 
-print("[RickPrime] ✅ MainFrame criado")
-
 local mainCorner = Instance.new("UICorner")
-mainCorner.CornerRadius = UDim.new(0, 2)
+mainCorner.CornerRadius = UDim.new(0, 6)
 mainCorner.Parent = mainFrame
 
+-- ✨ Gradiente no fundo
+local mainGrad = Instance.new("UIGradient")
+mainGrad.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 20, 12)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 8, 5)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 25, 15))
+})
+mainGrad.Rotation = 135
+mainGrad.Parent = mainFrame
+
 local mainStroke = Instance.new("UIStroke")
-mainStroke.Color = COR_LINHA_D
-mainStroke.Thickness = 1
-mainStroke.Transparency = 0.2
+mainStroke.Color = COR_LINHA
+mainStroke.Thickness = 1.5
+mainStroke.Transparency = 0.1
 mainStroke.Parent = mainFrame
 
-local function fazerCanto(posX, posY, offX, offY)
+-- ✨ Cantos
+local function fazerCanto(posX, posY, offX, offY, cor)
+    cor = cor or COR_LINHA
     local cantoH = Instance.new("Frame")
-    cantoH.Size = UDim2.new(0, 10, 0, 1)
+    cantoH.Size = UDim2.new(0, 12, 0, 2)
     cantoH.Position = UDim2.new(posX.Scale, posX.Offset + offX, posY.Scale, posY.Offset)
-    cantoH.BackgroundColor3 = COR_LINHA
+    cantoH.BackgroundColor3 = cor
     cantoH.BorderSizePixel = 0
     cantoH.ZIndex = 5
     cantoH.Parent = mainFrame
+    local cH = Instance.new("UICorner")
+    cH.CornerRadius = UDim.new(1, 0)
+    cH.Parent = cantoH
 
     local cantoV = Instance.new("Frame")
-    cantoV.Size = UDim2.new(0, 1, 0, 10)
+    cantoV.Size = UDim2.new(0, 2, 0, 12)
     cantoV.Position = UDim2.new(posX.Scale, posX.Offset, posY.Scale, posY.Offset + offY)
-    cantoV.BackgroundColor3 = COR_LINHA
+    cantoV.BackgroundColor3 = cor
     cantoV.BorderSizePixel = 0
     cantoV.ZIndex = 5
     cantoV.Parent = mainFrame
+    local cV = Instance.new("UICorner")
+    cV.CornerRadius = UDim.new(1, 0)
+    cV.Parent = cantoV
 end
 
 fazerCanto(UDim.new(0, 0), UDim.new(0, 0), 0, 0)
-fazerCanto(UDim.new(1, 0), UDim.new(0, 0), -10, 0)
-fazerCanto(UDim.new(0, 0), UDim.new(1, 0), 0, -10)
-fazerCanto(UDim.new(1, 0), UDim.new(1, 0), -10, -10)
+fazerCanto(UDim.new(1, 0), UDim.new(0, 0), -12, 0)
+fazerCanto(UDim.new(0, 0), UDim.new(1, 0), 0, -12)
+fazerCanto(UDim.new(1, 0), UDim.new(1, 0), -12, -12)
 
 local innerScreen = Instance.new("Frame")
-innerScreen.Size = UDim2.new(1, -8, 1, -8)
-innerScreen.Position = UDim2.new(0, 4, 0, 4)
+innerScreen.Size = UDim2.new(1, -10, 1, -10)
+innerScreen.Position = UDim2.new(0, 5, 0, 5)
 innerScreen.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+innerScreen.BackgroundTransparency = 0.4
 innerScreen.BorderSizePixel = 0
-innerScreen.ClipsDescendants = false
+innerScreen.ClipsDescendants = true
 innerScreen.Parent = mainFrame
 
 local innerCorner = Instance.new("UICorner")
-innerCorner.CornerRadius = UDim.new(0, 2)
+innerCorner.CornerRadius = UDim.new(0, 4)
 innerCorner.Parent = innerScreen
 
 local innerStroke = Instance.new("UIStroke")
 innerStroke.Color = COR_LINHA
 innerStroke.Thickness = 1
-innerStroke.Transparency = 0.4
+innerStroke.Transparency = 0.5
 innerStroke.Parent = innerScreen
 
+-- ✨ Efeitos dentro do menu
+criarParticulasFlutuantes(innerScreen, 3, COR_LINHA)
+criarScanline(innerScreen, COR_LINHA)
+
+-- Barra de status com gradiente animado
 local statusBar = Instance.new("Frame")
-statusBar.Size = UDim2.new(1, 0, 0, 2)
+statusBar.Size = UDim2.new(1, 0, 0, 3)
 statusBar.BackgroundColor3 = COR_LINHA
 statusBar.BorderSizePixel = 0
 statusBar.ZIndex = 3
 statusBar.Parent = innerScreen
 
+local statusGrad = Instance.new("UIGradient")
+statusGrad.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, COR_CIANO),
+    ColorSequenceKeypoint.new(0.5, COR_LINHA),
+    ColorSequenceKeypoint.new(1, COR_DOURADO)
+})
+statusGrad.Parent = statusBar
+
+task.spawn(function()
+    while statusBar and statusBar.Parent do
+        TweenService:Create(statusGrad, TweenInfo.new(2, Enum.EasingStyle.Sine), {
+            Offset = Vector2.new(1, 0)
+        }):Play()
+        task.wait(2)
+        if not (statusBar and statusBar.Parent) then break end
+        statusGrad.Offset = Vector2.new(-1, 0)
+        TweenService:Create(statusGrad, TweenInfo.new(2, Enum.EasingStyle.Sine), {
+            Offset = Vector2.new(0, 0)
+        }):Play()
+        task.wait(2)
+    end
+end)
+
 local divTop = Instance.new("Frame")
 divTop.Size = UDim2.new(1, -8, 0, 1)
-divTop.Position = UDim2.new(0, 4, 0, 38)
+divTop.Position = UDim2.new(0, 4, 0, 42)
 divTop.BackgroundColor3 = COR_LINHA_D
 divTop.BorderSizePixel = 0
 divTop.ZIndex = 3
 divTop.Parent = innerScreen
 
+local divGrad = Instance.new("UIGradient")
+divGrad.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 0, 0)),
+    ColorSequenceKeypoint.new(0.5, COR_LINHA),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 0, 0))
+})
+divGrad.Parent = divTop
+
 local titleTag = Instance.new("TextLabel")
 titleTag.Size = UDim2.new(1, -10, 0, 8)
-titleTag.Position = UDim2.new(0, 5, 0, 5)
+titleTag.Position = UDim2.new(0, 5, 0, 6)
 titleTag.BackgroundTransparency = 1
-titleTag.Text = "▰ PRIME OS // v43.0"
+titleTag.Text = "▰ PRIME OS // v44 ULTRA"
 titleTag.TextColor3 = COR_CIANO
 titleTag.Font = Enum.Font.Code
 titleTag.TextSize = 6
@@ -842,20 +1168,42 @@ titleTag.ZIndex = 4
 titleTag.Parent = innerScreen
 
 local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, -10, 0, 12)
-title.Position = UDim2.new(0, 5, 0, 12)
+title.Size = UDim2.new(1, -10, 0, 14)
+title.Position = UDim2.new(0, 5, 0, 14)
 title.BackgroundTransparency = 1
 title.Text = "RICK PRIME"
 title.TextColor3 = COR_LINHA
 title.Font = Enum.Font.GothamBlack
-title.TextSize = 10
+title.TextSize = 12
 title.TextXAlignment = Enum.TextXAlignment.Left
 title.ZIndex = 4
 title.Parent = innerScreen
 
+local titleGrad = Instance.new("UIGradient")
+titleGrad.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, COR_LINHA),
+    ColorSequenceKeypoint.new(0.5, COR_CIANO),
+    ColorSequenceKeypoint.new(1, COR_LINHA)
+})
+titleGrad.Parent = title
+
+task.spawn(function()
+    while title and title.Parent do
+        TweenService:Create(titleGrad, TweenInfo.new(1.5, Enum.EasingStyle.Sine), {
+            Offset = Vector2.new(0.5, 0)
+        }):Play()
+        task.wait(1.5)
+        if not (title and title.Parent) then break end
+        TweenService:Create(titleGrad, TweenInfo.new(1.5, Enum.EasingStyle.Sine), {
+            Offset = Vector2.new(0, 0)
+        }):Play()
+        task.wait(1.5)
+    end
+end)
+
 local liveDot = Instance.new("Frame")
-liveDot.Size = UDim2.new(0, 5, 0, 5)
-liveDot.Position = UDim2.new(1, -14, 0, 5)
+liveDot.Size = UDim2.new(0, 7, 0, 7)
+liveDot.Position = UDim2.new(1, -16, 0, 6)
 liveDot.BackgroundColor3 = COR_VERMELHO
 liveDot.BorderSizePixel = 0
 liveDot.ZIndex = 4
@@ -866,31 +1214,33 @@ liveDotCorner.CornerRadius = UDim.new(1, 0)
 liveDotCorner.Parent = liveDot
 
 local liveDotStroke = Instance.new("UIStroke")
-liveDotStroke.Color = Color3.fromRGB(255, 100, 100)
+liveDotStroke.Color = Color3.fromRGB(255, 150, 150)
 liveDotStroke.Thickness = 1
-liveDotStroke.Transparency = 0.5
+liveDotStroke.Transparency = 0.3
 liveDotStroke.Parent = liveDot
 
 task.spawn(function()
     while liveDot and liveDot.Parent do
         liveDot.BackgroundTransparency = 0
-        liveDotStroke.Transparency = 0.2
-        task.wait(0.6)
+        liveDotStroke.Transparency = 0.1
+        TweenService:Create(liveDot, TweenInfo.new(0.3), {Size = UDim2.new(0, 9, 0, 9)}):Play()
+        task.wait(0.5)
         if not (liveDot and liveDot.Parent) then break end
         liveDot.BackgroundTransparency = 0.7
         liveDotStroke.Transparency = 0.8
-        task.wait(0.6)
+        TweenService:Create(liveDot, TweenInfo.new(0.3), {Size = UDim2.new(0, 5, 0, 5)}):Play()
+        task.wait(0.5)
     end
 end)
 
 local quoteLabel = Instance.new("TextLabel")
-quoteLabel.Size = UDim2.new(0.9, 0, 0, 9)
-quoteLabel.Position = UDim2.new(0.05, 0, 0, 27)
+quoteLabel.Size = UDim2.new(0.9, 0, 0, 10)
+quoteLabel.Position = UDim2.new(0.05, 0, 0, 30)
 quoteLabel.BackgroundTransparency = 1
 quoteLabel.Text = "// WUBBA LUBBA DUB DUB_"
 quoteLabel.TextColor3 = COR_TEXTO_D
 quoteLabel.Font = Enum.Font.Code
-quoteLabel.TextSize = 5
+quoteLabel.TextSize = 6
 quoteLabel.TextXAlignment = Enum.TextXAlignment.Left
 quoteLabel.ZIndex = 4
 quoteLabel.Parent = innerScreen
@@ -918,25 +1268,23 @@ local playerBtns = {}
 local filtroAtivo = ""
 local modoFavorito = false
 local favoritos = {}
-
 local permanenciaAtiva = false
 local marcacaoP1Perm = nil
-
 local panelTween = nil
 local refreshLock = false
 local refreshAgendado = false
 
 --=============================================================
--- createButton
+-- ✨ createButton ULTRA
 --=============================================================
 local function createButton(text, yPos, iconeCor, semHover)
     iconeCor = iconeCor or COR_LINHA
 
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0.9, 0, 0, 16)
+    btn.Size = UDim2.new(0.9, 0, 0, 18)
     btn.Position = UDim2.new(0.05, 0, 0, yPos)
     btn.BackgroundColor3 = COR_PANEL
-    btn.BackgroundTransparency = 0.15
+    btn.BackgroundTransparency = 0.1
     btn.Text = ""
     btn.AutoButtonColor = false
     btn.BorderSizePixel = 0
@@ -945,54 +1293,93 @@ local function createButton(text, yPos, iconeCor, semHover)
     btn.Parent = innerScreen
 
     local bc = Instance.new("UICorner")
-    bc.CornerRadius = UDim.new(0, 2)
+    bc.CornerRadius = UDim.new(0, 4)
     bc.Parent = btn
+
+    -- ✨ Gradiente
+    local grad = Instance.new("UIGradient")
+    grad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(25, 30, 27)),
+        ColorSequenceKeypoint.new(0.5, COR_PANEL),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(10, 14, 12))
+    })
+    grad.Rotation = 90
+    grad.Parent = btn
 
     local bs = Instance.new("UIStroke")
     bs.Color = COR_LINHA_D
     bs.Thickness = 1
-    bs.Transparency = 0.5
+    bs.Transparency = 0.4
     bs.Parent = btn
 
+    -- ✨ Accent com gradiente
     local accent = Instance.new("Frame")
     accent.Name = "Accent"
-    accent.Size = UDim2.new(0, 2, 1, -6)
+    accent.Size = UDim2.new(0, 3, 1, -6)
     accent.Position = UDim2.new(0, 0, 0, 3)
     accent.BackgroundColor3 = iconeCor
     accent.BorderSizePixel = 0
     accent.ZIndex = 5
     accent.Parent = btn
 
+    local accentCorner = Instance.new("UICorner")
+    accentCorner.CornerRadius = UDim.new(1, 0)
+    accentCorner.Parent = accent
+
+    local accGrad = Instance.new("UIGradient")
+    accGrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, iconeCor),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255))
+    })
+    accGrad.Rotation = 90
+    accGrad.Parent = accent
+
     local lbl = Instance.new("TextLabel")
     lbl.Name = "Label"
-    lbl.Size = UDim2.new(1, -12, 1, 0)
-    lbl.Position = UDim2.new(0, 10, 0, 0)
+    lbl.Size = UDim2.new(1, -14, 1, 0)
+    lbl.Position = UDim2.new(0, 12, 0, 0)
     lbl.BackgroundTransparency = 1
     lbl.Text = text
     lbl.TextColor3 = COR_TEXTO
     lbl.Font = Enum.Font.Code
-    lbl.TextSize = 6
+    lbl.TextSize = 7
     lbl.TextXAlignment = Enum.TextXAlignment.Left
     lbl.ZIndex = 5
     lbl.Parent = btn
 
+    -- ✨ UIScale para hover
+    local scale = Instance.new("UIScale")
+    scale.Scale = 1
+    scale.Parent = btn
+
     if not semHover then
         btn.MouseEnter:Connect(function()
             if not btn:GetAttribute("ActiveState") then
-                btn.BackgroundColor3 = Color3.fromRGB(20, 30, 24)
+                TweenService:Create(scale, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1.03}):Play()
+                btn.BackgroundColor3 = Color3.fromRGB(25, 40, 32)
                 bs.Color = COR_LINHA
-                bs.Transparency = 0.2
+                bs.Transparency = 0.1
                 accent.BackgroundColor3 = COR_GLOW
+                lbl.TextColor3 = Color3.fromRGB(220, 255, 220)
             end
         end)
 
         btn.MouseLeave:Connect(function()
             if not btn:GetAttribute("ActiveState") then
+                TweenService:Create(scale, TweenInfo.new(0.15, Enum.EasingStyle.Quad), {Scale = 1}):Play()
                 btn.BackgroundColor3 = COR_PANEL
                 bs.Color = COR_LINHA_D
-                bs.Transparency = 0.5
+                bs.Transparency = 0.4
                 accent.BackgroundColor3 = iconeCor
+                lbl.TextColor3 = COR_TEXTO
             end
+        end)
+
+        btn.MouseButton1Down:Connect(function()
+            TweenService:Create(scale, TweenInfo.new(0.08), {Scale = 0.96}):Play()
+        end)
+        btn.MouseButton1Up:Connect(function()
+            TweenService:Create(scale, TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1.03}):Play()
         end)
     end
 
@@ -1000,21 +1387,19 @@ local function createButton(text, yPos, iconeCor, semHover)
 end
 
 --=============================================================
--- BOTÕES PRINCIPAIS
+-- BOTÕES
 --=============================================================
-local tpPlayerBtn  = createButton("▸ SELECT TARGET", 44, COR_LINHA)
-local clearBtn     = createButton("▸ CLEAR PORTALS", 62, COR_CIANO)
-local voidBtn      = createButton("▸ VOID DIMENSION", 80, COR_VERMELHO)
-local ceusBtn      = createButton("▸ CEUS", 98, COR_CIANO, true)
-local marcacaoBtn  = createButton("▸ MARCACAO [0/2]", 116, Color3.fromRGB(255, 180, 40))
-local permBtn      = createButton("▸ POSICAO PERM [OFF]", 134, COR_DOURADO)
-local antiTPBtn    = createButton("▸ ANTI-TP [OFF]", 152, COR_VERMELHO)
-local antiVoidBtn  = createButton("▸ ANTI-VOID [OFF]", 170, COR_CIANO)
-local minimizarBtn = createButton("▾ MINIMIZAR", 192, COR_CIANO)
-local rejoinBtn    = createButton("↻ REJOIN", 210, COR_DOURADO)
-local closeBtn     = createButton("✕ CLOSE SESSION", 234, COR_VERMELHO)
-
-print("[RickPrime] ✅ 11 botões criados")
+local tpPlayerBtn  = createButton("▸ SELECT TARGET", 46, COR_LINHA)
+local clearBtn     = createButton("▸ CLEAR PORTALS", 66, COR_CIANO)
+local voidBtn      = createButton("▸ VOID DIMENSION", 86, COR_VERMELHO)
+local ceusBtn      = createButton("▸ CEUS", 106, COR_CIANO, true)
+local marcacaoBtn  = createButton("▸ MARCACAO [0/2]", 126, COR_DOURADO)
+local permBtn      = createButton("▸ POSICAO PERM [OFF]", 146, COR_DOURADO)
+local antiTPBtn    = createButton("▸ ANTI-TP [OFF]", 166, COR_VERMELHO)
+local antiVoidBtn  = createButton("▸ ANTI-VOID [OFF]", 186, COR_CIANO)
+local minimizarBtn = createButton("▾ MINIMIZAR", 208, COR_CIANO)
+local rejoinBtn    = createButton("↻ REJOIN", 228, COR_DOURADO)
+local closeBtn     = createButton("✕ CLOSE SESSION", 254, COR_VERMELHO)
 
 local closeStroke    = closeBtn:FindFirstChildOfClass("UIStroke")
 local voidStroke     = voidBtn:FindFirstChildOfClass("UIStroke")
@@ -1027,7 +1412,7 @@ local rejoinStroke    = rejoinBtn:FindFirstChildOfClass("UIStroke")
 local ceusStroke      = ceusBtn:FindFirstChildOfClass("UIStroke")
 
 if voidStroke then voidStroke.Color = COR_VERMELHO voidStroke.Transparency = 0.3 end
-if marcacaoStroke then marcacaoStroke.Color = Color3.fromRGB(180, 130, 0) marcacaoStroke.Transparency = 0.4 end
+if marcacaoStroke then marcacaoStroke.Color = COR_DOURADO_D marcacaoStroke.Transparency = 0.4 end
 if antiTPStroke then antiTPStroke.Color = COR_VERMELHO antiTPStroke.Transparency = 0.4 end
 if closeStroke then closeStroke.Color = COR_VERMELHO closeStroke.Transparency = 0.2 end
 if permStroke then permStroke.Color = COR_DOURADO_D permStroke.Transparency = 0.4 end
@@ -1043,7 +1428,7 @@ if ceusLbl then ceusLbl.TextColor3 = COR_CIANO end
 
 if ceusStroke then
     ceusStroke.Color = COR_CIANO
-    ceusStroke.Transparency = 0.2
+    ceusStroke.Transparency = 0.15
 end
 
 local ceusAccent = ceusBtn:FindFirstChild("Accent")
@@ -1052,21 +1437,25 @@ if ceusAccent and ceusAccent:IsA("Frame") then
 end
 
 ceusBtn.MouseEnter:Connect(function()
-    ceusBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    ceusBtn.BackgroundColor3 = Color3.fromRGB(0, 15, 20)
 end)
-
 ceusBtn.MouseLeave:Connect(function()
     ceusBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 end)
 
+-- ✨ Brilho pulsante em botões perigosos
+criarBrilhoPulsante(voidBtn, COR_VERMELHO, 80, 150)
+criarBrilhoPulsante(antiTPBtn, COR_VERMELHO, 80, 150)
+criarBrilhoPulsante(ceusBtn, COR_CIANO, 80, 150)
+
 local footerLabel = Instance.new("TextLabel")
-footerLabel.Size = UDim2.new(1, -8, 0, 8)
-footerLabel.Position = UDim2.new(0, 4, 1, -10)
+footerLabel.Size = UDim2.new(1, -8, 0, 10)
+footerLabel.Position = UDim2.new(0, 4, 1, -12)
 footerLabel.BackgroundTransparency = 1
-footerLabel.Text = "PRIME RICK — C-137"
+footerLabel.Text = "◆ PRIME RICK — C-137 ◆"
 footerLabel.TextColor3 = COR_TEXTO_D
 footerLabel.Font = Enum.Font.Code
-footerLabel.TextSize = 5
+footerLabel.TextSize = 6
 footerLabel.ZIndex = 4
 footerLabel.Parent = innerScreen
 
@@ -1083,11 +1472,11 @@ slidingPanel.ZIndex = -1
 slidingPanel.Parent = mainFrame
 
 local panelCorner = Instance.new("UICorner")
-panelCorner.CornerRadius = UDim.new(0, 2)
+panelCorner.CornerRadius = UDim.new(0, 4)
 panelCorner.Parent = slidingPanel
 
 local panelStroke = Instance.new("UIStroke")
-panelStroke.Color = COR_LINHA_D
+panelStroke.Color = COR_LINHA
 panelStroke.Thickness = 1
 panelStroke.Transparency = 0.3
 panelStroke.Parent = slidingPanel
@@ -1100,7 +1489,7 @@ panelInner.BorderSizePixel = 0
 panelInner.Parent = slidingPanel
 
 local pInnerCorner = Instance.new("UICorner")
-pInnerCorner.CornerRadius = UDim.new(0, 2)
+pInnerCorner.CornerRadius = UDim.new(0, 4)
 pInnerCorner.Parent = panelInner
 
 local panelTitle = Instance.new("TextLabel")
@@ -1129,7 +1518,7 @@ favBtn.ZIndex = 4
 favBtn.Parent = panelInner
 
 local favCorner = Instance.new("UICorner")
-favCorner.CornerRadius = UDim.new(0, 2)
+favCorner.CornerRadius = UDim.new(0, 3)
 favCorner.Parent = favBtn
 
 local favStroke = Instance.new("UIStroke")
@@ -1152,7 +1541,7 @@ refreshBtn.ZIndex = 4
 refreshBtn.Parent = panelInner
 
 local refreshCorner = Instance.new("UICorner")
-refreshCorner.CornerRadius = UDim.new(0, 2)
+refreshCorner.CornerRadius = UDim.new(0, 3)
 refreshCorner.Parent = refreshBtn
 
 local refreshStroke = Instance.new("UIStroke")
@@ -1179,7 +1568,7 @@ searchBox.ZIndex = 4
 searchBox.Parent = panelInner
 
 local searchCorner = Instance.new("UICorner")
-searchCorner.CornerRadius = UDim.new(0, 2)
+searchCorner.CornerRadius = UDim.new(0, 3)
 searchCorner.Parent = searchBox
 
 local searchStroke = Instance.new("UIStroke")
@@ -1205,7 +1594,7 @@ uiListLayout.Padding = UDim.new(0, 2)
 uiListLayout.Parent = scrollingList
 
 --=============================================================
--- PORTAL INSTANCE
+-- ✨ PORTAL ULTRA
 --=============================================================
 local function createPortalInstance(cframe, tag, opcoes)
     opcoes = opcoes or {}
@@ -1236,26 +1625,116 @@ local function createPortalInstance(cframe, tag, opcoes)
         portalLoop:Play()
     end
 
+    -- ✨ PointLight + SpotLight
     local portalLight = Instance.new("PointLight")
-    portalLight.Color = Color3.fromRGB(50, 255, 80)
-    portalLight.Range = 15
-    portalLight.Brightness = 3
+    portalLight.Color = COR_LINHA
+    portalLight.Range = 25
+    portalLight.Brightness = 5
     portalLight.Parent = portalPart
 
+    local spotlight = Instance.new("SpotLight")
+    spotlight.Color = COR_LINHA
+    spotlight.Range = 30
+    spotlight.Brightness = 3
+    spotlight.Angle = 90
+    spotlight.Face = Enum.NormalId.Front
+    spotlight.Parent = portalPart
+
+    -- ✨ Múltiplas camadas de partículas
     if opcoes.comParticulas ~= false then
         local sparks = Instance.new("ParticleEmitter")
-        sparks.Color = ColorSequence.new(Color3.fromRGB(50, 255, 80))
+        sparks.Name = "PortalSparks"
+        sparks.Color = ColorSequence.new(COR_LINHA)
         sparks.Size = NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 0.3),
+            NumberSequenceKeypoint.new(0, 0.5),
             NumberSequenceKeypoint.new(1, 0)
         })
-        sparks.Lifetime = NumberRange.new(0.5, 1.2)
-        sparks.Rate = 25
-        sparks.Speed = NumberRange.new(3, 7)
+        sparks.Lifetime = NumberRange.new(0.6, 1.4)
+        sparks.Rate = 40
+        sparks.Speed = NumberRange.new(5, 12)
         sparks.SpreadAngle = Vector2.new(360, 360)
         sparks.EmissionDirection = Enum.NormalId.Front
+        sparks.LightEmission = 1
         sparks.Parent = portalPart
+
+        local brasas = Instance.new("ParticleEmitter")
+        brasas.Name = "PortalBrasas"
+        brasas.Color = ColorSequence.new(COR_OURO)
+        brasas.Size = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.3),
+            NumberSequenceKeypoint.new(0.5, 0.5),
+            NumberSequenceKeypoint.new(1, 0)
+        })
+        brasas.Lifetime = NumberRange.new(1, 2.5)
+        brasas.Rate = 25
+        brasas.Speed = NumberRange.new(3, 8)
+        brasas.SpreadAngle = Vector2.new(30, 30)
+        brasas.Acceleration = Vector3.new(0, 10, 0)
+        brasas.LightEmission = 0.8
+        brasas.Parent = portalPart
+
+        local glowP = Instance.new("ParticleEmitter")
+        glowP.Name = "PortalGlow"
+        glowP.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(200, 255, 200)),
+            ColorSequenceKeypoint.new(1, COR_LINHA)
+        })
+        glowP.Size = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 1),
+            NumberSequenceKeypoint.new(1, 2)
+        })
+        glowP.Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.5),
+            NumberSequenceKeypoint.new(1, 1)
+        })
+        glowP.Lifetime = NumberRange.new(0.8, 1.2)
+        glowP.Rate = 15
+        glowP.Speed = NumberRange.new(0.5, 2)
+        glowP.SpreadAngle = Vector2.new(360, 360)
+        glowP.LightEmission = 0.5
+        glowP.Parent = portalPart
     end
+
+    -- ✨ Anel rotativo
+    local ring = Instance.new("Part")
+    ring.Name = "RingRotativo"
+    ring.Shape = Enum.PartType.Cylinder
+    ring.Size = Vector3.new(0.15, 5, 5)
+    ring.CFrame = verticalCFrame * CFrame.Angles(0, 0, math.rad(90))
+    ring.Anchored = true
+    ring.CanCollide = false
+    ring.Material = Enum.Material.Neon
+    ring.Color = COR_LINHA
+    ring.Transparency = 0.3
+    ring.Parent = workspace
+    CollectionService:AddTag(ring, tag .. "_Ring")
+
+    task.spawn(function()
+        while ring and ring.Parent do
+            ring.CFrame = ring.CFrame * CFrame.Angles(math.rad(2), 0, 0)
+            task.wait(0.03)
+        end
+    end)
+
+    -- ✨ Feixe de luz vertical
+    local beam = Instance.new("Part")
+    beam.Name = "LightBeam"
+    beam.Size = Vector3.new(1, 50, 1)
+    beam.CFrame = CFrame.new(pos + Vector3.new(0, 25, 0))
+    beam.Anchored = true
+    beam.CanCollide = false
+    beam.Material = Enum.Material.Neon
+    beam.Color = COR_LINHA
+    beam.Transparency = 0.85
+    beam.Parent = workspace
+    CollectionService:AddTag(beam, tag .. "_Beam")
+
+    task.spawn(function()
+        while beam and beam.Parent do
+            beam.Transparency = 0.7 + math.sin(tick() * 3) * 0.15
+            task.wait(0.05)
+        end
+    end)
 
     local function createSurfaceFace(normalFace)
         local surf = Instance.new("SurfaceGui")
@@ -1276,18 +1755,41 @@ local function createPortalInstance(cframe, tag, opcoes)
         local c = Instance.new("UICorner")
         c.CornerRadius = UDim.new(0.5, 0)
         c.Parent = img
+
+        local stroke = Instance.new("UIStroke")
+        stroke.Color = COR_LINHA
+        stroke.Thickness = 3
+        stroke.Transparency = 0.2
+        stroke.Parent = img
+
         return img
     end
 
     local fFront = createSurfaceFace(Enum.NormalId.Front)
     local bFront = createSurfaceFace(Enum.NormalId.Back)
 
-    TweenService:Create(portalPart, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = Vector3.new(7, 7, 0.1)}):Play()
+    TweenService:Create(portalPart, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Size = Vector3.new(7, 7, 0.1)
+    }):Play()
+    TweenService:Create(ring, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Size = Vector3.new(0.15, 8, 8)
+    }):Play()
+
+    -- ✨ Pulso na luz
+    task.spawn(function()
+        while portalPart and portalPart.Parent do
+            TweenService:Create(portalLight, TweenInfo.new(0.6, Enum.EasingStyle.Sine), {Brightness = 7}):Play()
+            task.wait(0.6)
+            if not (portalPart and portalPart.Parent) then break end
+            TweenService:Create(portalLight, TweenInfo.new(0.6, Enum.EasingStyle.Sine), {Brightness = 4}):Play()
+            task.wait(0.6)
+        end
+    end)
 
     if opcoes.comGiro ~= false then
         task.spawn(function()
             while portalPart and portalPart.Parent do
-                local fRot = (fFront.Rotation + 8) % 360
+                local fRot = (fFront.Rotation + 10) % 360
                 fFront.Rotation = fRot
                 bFront.Rotation = fRot
                 task.wait(0.03)
@@ -1298,9 +1800,6 @@ local function createPortalInstance(cframe, tag, opcoes)
     return portalPart, fFront, bFront
 end
 
---=============================================================
--- PORTAL DE SAÍDA
---=============================================================
 local function spawnPortalSaida(char)
     if not char or not char.Parent then return end
     local root = char:FindFirstChild("HumanoidRootPart")
@@ -1321,7 +1820,7 @@ local function spawnPortalSaida(char)
 
     if portalAtras then portalAtras.Transparency = 1 end
 
-    task.delay(0.6, function()
+    task.delay(0.8, function()
         if portalAtras and portalAtras.Parent then fecharPortal(portalAtras) end
     end)
 
@@ -1355,10 +1854,10 @@ local function abrirPainel()
     panelTween = TweenService:Create(
         slidingPanel,
         TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-        { Size = UDim2.new(0, 90, 1, 0) }
+        { Size = UDim2.new(0, 95, 1, 0) }
     )
     panelTween:Play()
-    tpPlayerBtn.BackgroundColor3 = Color3.fromRGB(20, 40, 25)
+    tpPlayerBtn.BackgroundColor3 = Color3.fromRGB(20, 45, 30)
 end
 
 --=============================================================
@@ -1445,7 +1944,6 @@ end
 
 local function limparMarcacao(apagarPermanente)
     desconectarMarcacao()
-
     local manterP1Perm = permanenciaAtiva and (not apagarPermanente) and marcacaoP1Perm and marcacaoP1Perm.Parent
 
     if marcacaoP1 and marcacaoP1.Parent and marcacaoP1 ~= marcacaoP1Perm then
@@ -1496,7 +1994,6 @@ local function conectarPortais(p1, p2)
 
         task.delay(0.5, function()
             desconectarMarcacao()
-
             if marcacaoP2 and marcacaoP2.Parent then
                 fecharPortal(marcacaoP2)
             end
@@ -1512,7 +2009,6 @@ local function conectarPortais(p1, p2)
             end
 
             atualizarLabelMarcacao()
-
             task.delay(COOLDOWN, function()
                 isTeleporting = false
             end)
@@ -1533,7 +2029,6 @@ local function clicarMarcacao()
     if state == 0 then
         setRandomQuote()
         desconectarMarcacao()
-
         if marcacaoP1 and marcacaoP1.Parent then fecharPortal(marcacaoP1) end
         if marcacaoP2 and marcacaoP2.Parent then fecharPortal(marcacaoP2) end
         marcacaoP1, marcacaoP2 = nil, nil
@@ -1544,7 +2039,6 @@ local function clicarMarcacao()
         else
             marcacaoP1 = createPortalInstance(root.CFrame * CFrame.new(0, 0, -5), TAG_M1)
         end
-
         atualizarLabelMarcacao()
 
     elseif state == 1 then
@@ -1553,7 +2047,6 @@ local function clicarMarcacao()
             limparMarcacao()
             return
         end
-
         marcacaoP2 = createPortalInstance(root.CFrame * CFrame.new(0, 0, -5), TAG_M2)
         atualizarLabelMarcacao()
         conectarPortais(marcacaoP1, marcacaoP2)
@@ -1574,7 +2067,6 @@ local function atualizarVisibilidade()
             local nome = child:GetAttribute("NomeJogador") or ""
             local userId = child:GetAttribute("UserId") or 0
             local bate = (filtroAtivo == "") or (nome:lower():find(filtroAtivo:lower(), 1, true) ~= nil)
-
             child.Visible = bate
             if bate then
                 table.insert(btns, {
@@ -1585,16 +2077,13 @@ local function atualizarVisibilidade()
             end
         end
     end
-
     table.sort(btns, function(a, b)
         if a.isFav ~= b.isFav then return a.isFav end
         return a.nome:lower() < b.nome:lower()
     end)
-
     for i, item in ipairs(btns) do
         item.btn.LayoutOrder = i
     end
-
     return #btns
 end
 
@@ -1614,7 +2103,7 @@ local function criarBotaoPlayer(p, layoutOrder, isFriend)
     pBtn.Parent = scrollingList
 
     local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, 2)
+    c.CornerRadius = UDim.new(0, 3)
     c.Parent = pBtn
 
     local bStroke = Instance.new("UIStroke")
@@ -1631,6 +2120,10 @@ local function criarBotaoPlayer(p, layoutOrder, isFriend)
     accent.ZIndex = 4
     accent.Parent = pBtn
 
+    local accentC = Instance.new("UICorner")
+    accentC.CornerRadius = UDim.new(1, 0)
+    accentC.Parent = accent
+
     local lbl = Instance.new("TextLabel")
     lbl.Size = UDim2.new(1, -10, 1, 0)
     lbl.Position = UDim2.new(0, 8, 0, 0)
@@ -1645,7 +2138,7 @@ local function criarBotaoPlayer(p, layoutOrder, isFriend)
 
     local function atualizarVisual()
         if favoritos[p.UserId] then
-            lbl.Text = "* " .. p.DisplayName
+            lbl.Text = "★ " .. p.DisplayName
             lbl.TextColor3 = COR_DOURADO
             accent.BackgroundColor3 = COR_DOURADO
             bStroke.Color = COR_DOURADO
@@ -1673,9 +2166,9 @@ local function criarBotaoPlayer(p, layoutOrder, isFriend)
 
     pBtn.MouseEnter:Connect(function()
         if not favoritos[p.UserId] then
-            pBtn.BackgroundColor3 = Color3.fromRGB(20, 30, 24)
+            pBtn.BackgroundColor3 = Color3.fromRGB(20, 35, 28)
             bStroke.Color = COR_LINHA
-            bStroke.Transparency = 0.2
+            bStroke.Transparency = 0.1
             accent.BackgroundColor3 = COR_GLOW
         end
     end)
@@ -1703,10 +2196,8 @@ local function criarBotaoPlayer(p, layoutOrder, isFriend)
             else
                 favoritos[p.UserId] = true
             end
-
             atualizarVisual()
             pBtn:SetAttribute("isFav", favoritos[p.UserId] == true)
-
             local count = atualizarVisibilidade()
             scrollingList.CanvasSize = UDim2.new(0, 0, 0, count * 19)
             return
@@ -1821,13 +2312,11 @@ local function refreshPlayerList()
                 end
             end
         end
-
         for userId, btn in pairs(playerBtns) do
             if not btn or not btn.Parent then
                 playerBtns[userId] = nil
             end
         end
-
         for userId, btn in pairs(playerBtns) do
             local jogador = Players:GetPlayerByUserId(userId)
             if not jogador or jogador == player then
@@ -1835,7 +2324,6 @@ local function refreshPlayerList()
                 playerBtns[userId] = nil
             end
         end
-
         local amizades = {}
         for _, p in ipairs(Players:GetPlayers()) do
             if p ~= player then
@@ -1843,25 +2331,21 @@ local function refreshPlayerList()
                 amizades[p.UserId] = okF and isF or false
             end
         end
-
         for _, p in ipairs(Players:GetPlayers()) do
             if p ~= player and not playerBtns[p.UserId] then
                 playerBtns[p.UserId] = criarBotaoPlayer(p, 0, amizades[p.UserId] or false)
             end
         end
-
         local count = atualizarVisibilidade()
         scrollingList.CanvasSize = UDim2.new(0, 0, 0, count * 19)
         return count
     end)
 
     refreshLock = false
-
     if not ok then
         warn("[RickPrime] Erro no refreshPlayerList:", resultado)
         return 0
     end
-
     return resultado
 end
 
@@ -1936,11 +2420,9 @@ local function abrirPortalVoid()
 
                 task.spawn(function()
                     task.wait(0.2)
-
                     local cc = player.Character
                     local cr = cc and cc:FindFirstChild("HumanoidRootPart")
                     if not cr then return end
-
                     if localTP and localTP.Parent then
                         cr.CFrame = CFrame.new(localTP.Position + Vector3.new(0, 5, 0))
                     else
@@ -1951,7 +2433,6 @@ local function abrirPortalVoid()
                             cr.CFrame = CFrame.new(0, 50, 0)
                         end
                     end
-
                     task.wait(0.3)
                     deletarVoidPlace()
                     deletarLocalTP()
@@ -2027,11 +2508,9 @@ local function abrirPortalCeu()
 
                 task.spawn(function()
                     task.wait(0.2)
-
                     local cc = player.Character
                     local cr = cc and cc:FindFirstChild("HumanoidRootPart")
                     if not cr then return end
-
                     if ceuLocalTP and ceuLocalTP.Parent then
                         cr.CFrame = CFrame.new(ceuLocalTP.Position + Vector3.new(0, 5, 0))
                     else
@@ -2042,7 +2521,6 @@ local function abrirPortalCeu()
                             cr.CFrame = CFrame.new(0, 50, 0)
                         end
                     end
-
                     task.wait(0.3)
                     deletarCeuPlace()
                     deletarCeuLocalTP()
@@ -2055,7 +2533,7 @@ local function abrirPortalCeu()
 end
 
 --=============================================================
--- HANDLERS DOS BOTÕES
+-- HANDLERS
 --=============================================================
 voidBtn.MouseButton1Click:Connect(abrirPortalVoid)
 ceusBtn.MouseButton1Click:Connect(abrirPortalCeu)
@@ -2063,15 +2541,12 @@ marcacaoBtn.MouseButton1Click:Connect(clicarMarcacao)
 
 tpPlayerBtn.MouseButton1Click:Connect(function()
     setRandomQuote()
-
     filtroAtivo = ""
     if searchBox and searchBox.Text ~= "" then
         searchBox.Text = ""
     end
-
     refreshPlayerList()
     local otherCount = contarPlayersVisiveis()
-
     if otherCount == 0 then
         local lbl = tpPlayerBtn:FindFirstChildOfClass("TextLabel")
         if lbl then lbl.Text = "▸ NO PLAYERS!" end
@@ -2080,7 +2555,6 @@ tpPlayerBtn.MouseButton1Click:Connect(function()
         if panelOpen then fecharPainel() end
         return
     end
-
     if panelOpen then
         fecharPainel()
     else
@@ -2106,7 +2580,7 @@ end)
 
 favBtn.MouseEnter:Connect(function()
     if not modoFavorito then
-        favBtn.BackgroundColor3 = Color3.fromRGB(20, 30, 24)
+        favBtn.BackgroundColor3 = Color3.fromRGB(20, 35, 28)
         favStroke.Color = COR_LINHA
         favStroke.Transparency = 0.1
     end
@@ -2121,7 +2595,7 @@ favBtn.MouseLeave:Connect(function()
 end)
 
 refreshBtn.MouseEnter:Connect(function()
-    refreshBtn.BackgroundColor3 = Color3.fromRGB(20, 30, 24)
+    refreshBtn.BackgroundColor3 = Color3.fromRGB(20, 35, 28)
     refreshStroke.Color = COR_LINHA
     refreshStroke.Transparency = 0.1
 end)
@@ -2135,11 +2609,10 @@ end)
 refreshBtn.MouseButton1Click:Connect(function()
     refreshBtn.Text = "..."
     local count = refreshPlayerList()
-    TweenService:Create(refreshBtn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(30, 60, 40)}):Play()
+    TweenService:Create(refreshBtn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(30, 70, 50)}):Play()
     task.wait(0.3)
     refreshBtn.Text = "R"
     TweenService:Create(refreshBtn, TweenInfo.new(0.3), {BackgroundColor3 = COR_PANEL}):Play()
-
     if not modoFavorito then
         panelTitle.Text = "TARGETS (" .. count .. ")"
         task.delay(2, function()
@@ -2152,7 +2625,6 @@ end)
 
 favBtn.MouseButton1Click:Connect(function()
     modoFavorito = not modoFavorito
-
     if modoFavorito then
         favBtn.TextColor3 = COR_DOURADO
         favBtn.BackgroundColor3 = Color3.fromRGB(30, 25, 10)
@@ -2185,16 +2657,13 @@ Players.PlayerRemoving:Connect(function(p)
     local btn = playerBtns[p.UserId]
     if btn and btn.Parent then btn:Destroy() end
     playerBtns[p.UserId] = nil
-
     for _, filho in ipairs(scrollingList:GetChildren()) do
         if filho:IsA("TextButton") and filho:GetAttribute("UserId") == p.UserId then
             filho:Destroy()
         end
     end
-
     local count = atualizarVisibilidade()
     scrollingList.CanvasSize = UDim2.new(0, 0, 0, count * 19)
-
     if panelOpen and count == 0 then
         fecharPainel()
     end
@@ -2220,14 +2689,12 @@ permBtn.MouseButton1Click:Connect(function()
             permStroke.Color = COR_DOURADO
             permStroke.Transparency = 0.1
         end
-
         if marcacaoP1 and marcacaoP1.Parent then fecharPortal(marcacaoP1) end
         if marcacaoP2 and marcacaoP2.Parent then fecharPortal(marcacaoP2) end
         marcacaoP1, marcacaoP2 = nil, nil
         marcacaoP1Perm = nil
         desconectarMarcacao()
         atualizarLabelMarcacao()
-
     else
         if lbl then
             lbl.Text = "▸ POSICAO PERM [OFF]"
@@ -2238,18 +2705,15 @@ permBtn.MouseButton1Click:Connect(function()
             permStroke.Color = COR_DOURADO_D
             permStroke.Transparency = 0.4
         end
-
         if marcacaoP1Perm and marcacaoP1Perm.Parent then
             fecharPortal(marcacaoP1Perm)
         end
         if marcacaoP2 and marcacaoP2.Parent then
             fecharPortal(marcacaoP2)
         end
-
         marcacaoP1Perm = nil
         marcacaoP2 = nil
         marcacaoP1 = nil
-
         desconectarMarcacao()
         atualizarLabelMarcacao()
     end
@@ -2271,7 +2735,7 @@ antiTPBtn.MouseButton1Click:Connect(function()
             lbl.Text = "▸ ANTI-TP [ON]"
             lbl.TextColor3 = COR_LINHA
         end
-        antiTPBtn.BackgroundColor3 = Color3.fromRGB(15, 35, 20)
+        antiTPBtn.BackgroundColor3 = Color3.fromRGB(15, 40, 22)
         if antiTPStroke then
             antiTPStroke.Color = COR_LINHA
             antiTPStroke.Transparency = 0.1
@@ -2292,7 +2756,6 @@ end)
 
 RunService.Heartbeat:Connect(function()
     if not genv.AntiTP_Ativo then return end
-
     if genv.AntiTP_IgnorarProximo then
         genv.AntiTP_IgnorarProximo = false
         local c = player.Character
@@ -2330,18 +2793,14 @@ RunService.Heartbeat:Connect(function()
 
     if distancia > ATP.DistanciaMax then
         atpCooldown = true
-
         local rot = hrp.CFrame - hrp.CFrame.Position
         hrp.CFrame = CFrame.new(atpUltPos + Vector3.new(0, ATP.OffsetY, 0)) * rot
         hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
         hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-
         alertaVermelho()
         efeitoTP()
-
         atpUltPos = atpUltPos + Vector3.new(0, ATP.OffsetY, 0)
         atpUltimoCheck = agora
-
         task.delay(0.3, function() atpCooldown = false end)
         return
     end
@@ -2372,7 +2831,7 @@ local avDesativadoExpira = 0
 local avHistoricoMortes = {}
 local avUltimaPosicaoSegura = nil
 
-local avFade = mkFrame("AV_Fade", Color3.fromRGB(0, 220, 255), 1000)
+local avFade = mkFrame("AV_Fade", COR_CIANO, 1000)
 local avFlash = mkFrame("AV_Flash", Color3.fromRGB(255, 255, 255), 1001)
 
 local avOndasContainer = Instance.new("Frame")
@@ -2418,15 +2877,24 @@ local function avEfeitoOndas(quantidade, duracao, cor)
 
                 local s = Instance.new("UIStroke")
                 s.Color = cor
-                s.Thickness = 5
-                s.Transparency = 0.3
+                s.Thickness = 6
+                s.Transparency = 0.2
                 s.Parent = onda
 
+                local s2 = Instance.new("UIStroke")
+                s2.Color = Color3.fromRGB(255, 255, 255)
+                s2.Thickness = 2
+                s2.Transparency = 0.6
+                s2.Parent = onda
+
                 TweenService:Create(onda, TweenInfo.new(duracao, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-                    Size = UDim2.new(3, 0, 3, 0)
+                    Size = UDim2.new(3.5, 0, 3.5, 0)
                 }):Play()
                 TweenService:Create(s, TweenInfo.new(duracao, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
                     Transparency = 1, Thickness = 1
+                }):Play()
+                TweenService:Create(s2, TweenInfo.new(duracao, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                    Transparency = 1, Thickness = 0
                 }):Play()
 
                 task.wait(duracao)
@@ -2440,16 +2908,13 @@ end
 local function avEfeitoParticulas(quantidade, cor)
     task.spawn(function()
         for _ = 1, quantidade do
-            if particulasAtivas >= MAX_PARTICULAS then break end
-            particulasAtivas = particulasAtivas + 1
-
             task.spawn(function()
                 local part = Instance.new("Frame")
-                part.Size = UDim2.new(0, math.random(3, 8), 0, math.random(3, 8))
+                part.Size = UDim2.new(0, math.random(3, 10), 0, math.random(3, 10))
                 part.Position = UDim2.new(0.5, 0, 0.5, 0)
                 part.AnchorPoint = Vector2.new(0.5, 0.5)
                 part.BackgroundColor3 = cor
-                part.BackgroundTransparency = math.random(10, 40) / 100
+                part.BackgroundTransparency = math.random(5, 40) / 100
                 part.BorderSizePixel = 0
                 part.ZIndex = 1005
                 part.Parent = avParticulasContainer
@@ -2458,17 +2923,34 @@ local function avEfeitoParticulas(quantidade, cor)
                 c.CornerRadius = UDim.new(1, 0)
                 c.Parent = part
 
+                local glow = Instance.new("Frame")
+                glow.Size = UDim2.new(2, 0, 2, 0)
+                glow.Position = UDim2.new(0.5, 0, 0.5, 0)
+                glow.AnchorPoint = Vector2.new(0.5, 0.5)
+                glow.BackgroundColor3 = cor
+                glow.BackgroundTransparency = 0.7
+                glow.BorderSizePixel = 0
+                glow.ZIndex = 1004
+                glow.Parent = part
+
+                local gc = Instance.new("UICorner")
+                gc.CornerRadius = UDim.new(1, 0)
+                gc.Parent = glow
+
                 local angulo = math.random() * math.pi * 2
-                local distancia = math.random(80, 150) / 100
-                local tw = TweenService:Create(part, TweenInfo.new(math.random(40, 70) / 100, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                local distancia = math.random(80, 180) / 100
+                local tw = TweenService:Create(part, TweenInfo.new(math.random(40, 80) / 100, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
                     Position = UDim2.new(0.5 + math.cos(angulo) * distancia, 0, 0.5 + math.sin(angulo) * distancia, 0),
                     BackgroundTransparency = 1,
                     Size = UDim2.new(0, 0, 0, 0)
                 })
+                TweenService:Create(glow, TweenInfo.new(math.random(40, 80) / 100, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                    BackgroundTransparency = 1,
+                    Size = UDim2.new(0, 0, 0, 0)
+                }):Play()
                 tw:Play()
                 tw.Completed:Wait()
                 if part and part.Parent then part:Destroy() end
-                particulasAtivas = math.max(0, particulasAtivas - 1)
             end)
         end
     end)
@@ -2476,18 +2958,20 @@ end
 
 local function avEfeitoTeleporte()
     task.spawn(function()
-        avFade.BackgroundColor3 = Color3.fromRGB(0, 220, 255)
-        avFade.BackgroundTransparency = 0.55
+        avFade.BackgroundColor3 = COR_CIANO
+        avFade.BackgroundTransparency = 0.5
 
         task.wait(0.05)
         avFlashTela(Color3.fromRGB(255, 255, 255), 0.18)
+        pulsoCor(COR_CIANO, 0.5)
 
-        TweenService:Create(avFade, TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        TweenService:Create(avFade, TweenInfo.new(0.65, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
             BackgroundTransparency = 1
         }):Play()
 
-        avEfeitoOndas(4, 0.6, Color3.fromRGB(50, 255, 130))
-        avEfeitoParticulas(80, Color3.fromRGB(50, 255, 130))
+        avEfeitoOndas(4, 0.7, COR_LINHA)
+        avEfeitoParticulas(80, COR_LINHA)
+        efeitoStreaks(6, COR_CIANO)
         cameraShake(1.5, 0.3)
         criarBlur(12)
         removerBlur(0.5)
@@ -2523,7 +3007,6 @@ local function avBuscarSuperficie(posicao, character)
     end
 
     if #candidatos == 0 then return nil end
-
     local melhor = candidatos[1]
     for _, c in ipairs(candidatos) do
         local dY = c.posicao.Y - melhor.posicao.Y
@@ -2650,7 +3133,6 @@ end
 
 RunService.Heartbeat:Connect(function()
     if not antiVoidAtivo then return end
-
     local character = player.Character
     if not character then
         avTempoCaindo = 0
@@ -2658,7 +3140,7 @@ RunService.Heartbeat:Connect(function()
         return
     end
 
-    local hrp      = character:FindFirstChild("HumanoidRootPart")
+    local hrp = character:FindFirstChild("HumanoidRootPart")
     local humanoid = character:FindFirstChildOfClass("Humanoid")
 
     if not hrp or not humanoid then
@@ -2748,12 +3230,11 @@ antiVoidBtn.MouseButton1Click:Connect(function()
             lbl.Text = "▸ ANTI-VOID [ON]"
             lbl.TextColor3 = COR_CIANO
         end
-        antiVoidBtn.BackgroundColor3 = Color3.fromRGB(10, 35, 40)
+        antiVoidBtn.BackgroundColor3 = Color3.fromRGB(10, 40, 45)
         if antiVoidStroke then
             antiVoidStroke.Color = COR_CIANO
             antiVoidStroke.Transparency = 0.1
         end
-
         avTpCooldown = false
         avTempoCaindo = 0
         avUltimoTempo = os.clock()
@@ -2779,7 +3260,6 @@ end)
 --=============================================================
 clearBtn.MouseButton1Click:Connect(function()
     setRandomQuote()
-
     local tinha = (#activePortals > 0)
         or (marcacaoP1 and marcacaoP1.Parent ~= nil)
         or (marcacaoP2 and marcacaoP2.Parent ~= nil)
@@ -2791,7 +3271,7 @@ clearBtn.MouseButton1Click:Connect(function()
 
     if tinha then
         if lbl then lbl.Text = "▸ CLEARED!" end
-        clearBtn.BackgroundColor3 = Color3.fromRGB(15, 35, 25)
+        clearBtn.BackgroundColor3 = Color3.fromRGB(15, 40, 28)
         task.wait(0.6)
     end
 
@@ -2805,7 +3285,7 @@ end)
 -- MINIMIZAR
 --=============================================================
 local menuMinimizado = false
-local alturaOriginal = 320
+local alturaOriginal = 340
 local alturaMinimizada = 40
 
 local ocultarAoMinimizar = {
@@ -2825,7 +3305,7 @@ minimizarBtn.MouseButton1Click:Connect(function()
             lbl.Text = "▸ EXPANDIR"
             lbl.TextColor3 = COR_CIANO
         end
-        minimizarBtn.BackgroundColor3 = Color3.fromRGB(10, 35, 40)
+        minimizarBtn.BackgroundColor3 = Color3.fromRGB(10, 40, 45)
         if minimizarStroke then
             minimizarStroke.Color = COR_CIANO
             minimizarStroke.Transparency = 0.1
@@ -2852,9 +3332,8 @@ minimizarBtn.MouseButton1Click:Connect(function()
         minimizarBtn.Position = UDim2.new(0.05, 0, 0, 10)
 
         TweenService:Create(mainFrame, TweenInfo.new(0.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-            Size = UDim2.new(0, 100, 0, alturaMinimizada)
+            Size = UDim2.new(0, 110, 0, alturaMinimizada)
         }):Play()
-
     else
         if lbl then
             lbl.Text = "▾ MINIMIZAR"
@@ -2869,17 +3348,17 @@ minimizarBtn.MouseButton1Click:Connect(function()
         TweenService:Create(titleTag, TweenInfo.new(0.25), {TextTransparency = 0}):Play()
         TweenService:Create(title, TweenInfo.new(0.25), {TextTransparency = 0}):Play()
         TweenService:Create(liveDot, TweenInfo.new(0.25), {BackgroundTransparency = 0}):Play()
-        TweenService:Create(liveDotStroke, TweenInfo.new(0.25), {Transparency = 0.5}):Play()
+        TweenService:Create(liveDotStroke, TweenInfo.new(0.25), {Transparency = 0.3}):Play()
         TweenService:Create(quoteLabel, TweenInfo.new(0.25), {TextTransparency = 0}):Play()
         TweenService:Create(divTop, TweenInfo.new(0.25), {BackgroundTransparency = 0}):Play()
         TweenService:Create(footerLabel, TweenInfo.new(0.25), {TextTransparency = 0}):Play()
         TweenService:Create(statusBar, TweenInfo.new(0.25), {BackgroundTransparency = 0}):Play()
-        TweenService:Create(innerStroke, TweenInfo.new(0.25), {Transparency = 0.4}):Play()
+        TweenService:Create(innerStroke, TweenInfo.new(0.25), {Transparency = 0.5}):Play()
 
-        minimizarBtn.Position = UDim2.new(0.05, 0, 0, 192)
+        minimizarBtn.Position = UDim2.new(0.05, 0, 0, 208)
 
         TweenService:Create(mainFrame, TweenInfo.new(0.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-            Size = UDim2.new(0, 100, 0, alturaOriginal)
+            Size = UDim2.new(0, 110, 0, alturaOriginal)
         }):Play()
 
         for _, btn in ipairs(ocultarAoMinimizar) do
@@ -2891,48 +3370,25 @@ minimizarBtn.MouseButton1Click:Connect(function()
             if btn == ceusBtn then
                 btn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
                 btn.BackgroundTransparency = 0
-
                 local l = btn:FindFirstChildOfClass("TextLabel")
-                if l then
-                    l.TextTransparency = 0
-                    l.TextColor3 = COR_CIANO
-                end
-
+                if l then l.TextTransparency = 0 l.TextColor3 = COR_CIANO end
                 local st = btn:FindFirstChildOfClass("UIStroke")
-                if st then
-                    st.Transparency = 0.2
-                    st.Color = COR_CIANO
-                end
-
+                if st then st.Transparency = 0.15 st.Color = COR_CIANO end
                 local a = btn:FindFirstChild("Accent")
-                if a and a:IsA("Frame") then
-                    a.BackgroundTransparency = 0
-                    a.BackgroundColor3 = COR_CIANO
-                end
+                if a and a:IsA("Frame") then a.BackgroundTransparency = 0 a.BackgroundColor3 = COR_CIANO end
             else
-                local transOriginal = 0.15
-                local strokeTransOriginal = 0.5
-
-                if btn == closeBtn then
-                    strokeTransOriginal = 0.2
-                elseif btn == voidBtn then
-                    strokeTransOriginal = 0.3
-                elseif btn == antiTPBtn or btn == marcacaoBtn or btn == permBtn or btn == antiVoidBtn or btn == rejoinBtn then
-                    strokeTransOriginal = 0.4
-                end
+                local transOriginal = 0.1
+                local strokeTransOriginal = 0.4
+                if btn == closeBtn then strokeTransOriginal = 0.2
+                elseif btn == voidBtn then strokeTransOriginal = 0.3
+                elseif btn == antiTPBtn or btn == marcacaoBtn or btn == permBtn or btn == antiVoidBtn or btn == rejoinBtn then strokeTransOriginal = 0.4 end
 
                 btn.BackgroundTransparency = transOriginal
                 btn.BackgroundColor3 = COR_PANEL
-
                 local l = btn:FindFirstChildOfClass("TextLabel")
-                if l then
-                    l.TextTransparency = 0
-                    l.TextColor3 = COR_TEXTO
-                end
-
+                if l then l.TextTransparency = 0 l.TextColor3 = COR_TEXTO end
                 local st = btn:FindFirstChildOfClass("UIStroke")
                 if st then st.Transparency = strokeTransOriginal end
-
                 local a = btn:FindFirstChild("Accent")
                 if a and a:IsA("Frame") then a.BackgroundTransparency = 0 end
             end
@@ -2946,7 +3402,6 @@ end)
 rejoinBtn.MouseButton1Click:Connect(function()
     setRandomQuote()
     local lbl = rejoinBtn:FindFirstChildOfClass("TextLabel")
-
     if lbl then
         lbl.Text = "↻ REJOINING..."
         lbl.TextColor3 = COR_DOURADO
@@ -2958,12 +3413,12 @@ rejoinBtn.MouseButton1Click:Connect(function()
     end
 
     flashTela(COR_DOURADO, 0.3)
+    efeitoStreaks(10, COR_DOURADO)
     task.wait(0.5)
 
     local ok = pcall(function()
         TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, player)
     end)
-
     if not ok then
         pcall(function()
             TeleportService:Teleport(game.PlaceId, player)
@@ -2993,7 +3448,6 @@ local function fullCleanup()
     deletarLocalTP()
     deletarCeuPlace()
     deletarCeuLocalTP()
-
     limparMarcacao(true)
 
     permanenciaAtiva = false
@@ -3002,6 +3456,10 @@ local function fullCleanup()
     if blurEffect and blurEffect.Parent then
         blurEffect:Destroy()
         blurEffect = nil
+    end
+    if ccEffect and ccEffect.Parent then
+        ccEffect:Destroy()
+        ccEffect = nil
     end
     blurTween = nil
 
@@ -3022,7 +3480,6 @@ genv.RickPortalCleanup = fullCleanup
 --=============================================================
 closeBtn.MouseButton1Click:Connect(function()
     setRandomQuote()
-
     local closeLbl = closeBtn:FindFirstChildOfClass("TextLabel")
     if closeLbl then
         closeLbl.Text = "✕ FECHANDO..."
@@ -3035,7 +3492,6 @@ closeBtn.MouseButton1Click:Connect(function()
 
     wipeAllPortals(true)
     limparMarcacao(true)
-
     deletarVoidPlace()
     deletarLocalTP()
     deletarCeuPlace()
@@ -3050,7 +3506,7 @@ closeBtn.MouseButton1Click:Connect(function()
     local slideOutTween = TweenService:Create(
         mainFrame,
         TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.In),
-        {Position = UDim2.new(0, -150, 0.35, -160)}
+        {Position = UDim2.new(0, -160, 0.35, -170)}
     )
     slideOutTween:Play()
     slideOutTween.Completed:Wait()
@@ -3058,6 +3514,5 @@ closeBtn.MouseButton1Click:Connect(function()
     fullCleanup()
 end)
 
-print("✅ Rick Prime v43 — DELTA COMPATIBLE 🎯")
+print("✨ Rick Prime v44 ULTRA — Carregado ✨")
 print("[RickPrime] GUI Parent:", GUI_PARENT:GetFullName())
-print("[RickPrime] ScreenGui:", screenGui:GetFullName())
