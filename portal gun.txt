@@ -1,7 +1,8 @@
 --=============================================================
--- RICK PRIME — Portal GUI + Marcação + Anti-TP + PERM (v37)
+-- RICK PRIME — Portal GUI + Marcação + Anti-TP + PERM (v38)
 -- Estilo Tech / HUD Sci-Fi — Sistema de Favoritos ♾
--- + CÉUS com o mesmo chão do VOID (Grass verde)
+-- + CLOSE SESSION reseta TUDO
+-- + CÉUS com chão igual ao VOID
 -- + Botão CÉUS fundo preto + letras ciano
 -- + FIX minimizar definitivo (Visible=false)
 -- + Fundo do menu 100% preto
@@ -662,7 +663,6 @@ local function criarCeuPlace()
     folder.Parent = workspace
     ceuPlaceFolder = folder
 
-    -- ✅ Chão IGUAL ao Void (Grass verde)
     local chao = Instance.new("Part")
     chao.Name = "CeuChao"
     chao.Size = Vector3.new(CEU_TAMANHO * 2, 4, CEU_TAMANHO * 2)
@@ -850,7 +850,7 @@ local titleTag = Instance.new("TextLabel")
 titleTag.Size = UDim2.new(1, -10, 0, 8)
 titleTag.Position = UDim2.new(0, 5, 0, 5)
 titleTag.BackgroundTransparency = 1
-titleTag.Text = "▰ PRIME OS // v37.0"
+titleTag.Text = "▰ PRIME OS // v38.0"
 titleTag.TextColor3 = COR_CIANO
 titleTag.Font = Enum.Font.Code
 titleTag.TextSize = 6
@@ -1622,7 +1622,7 @@ local function abrirPortalCeu()
 end
 
 --=============================================================
--- ✅ MARCAÇÃO v37
+-- ✅ MARCAÇÃO v38
 --=============================================================
 local function atualizarLabelMarcacao()
     local lbl = marcacaoBtn:FindFirstChildOfClass("TextLabel")
@@ -2217,7 +2217,7 @@ ceusBtn.MouseButton1Click:Connect(abrirPortalCeu)
 marcacaoBtn.MouseButton1Click:Connect(clicarMarcacao)
 
 --=============================================================
--- ✅ PERM BUTTON v37
+-- ✅ PERM BUTTON v38
 --=============================================================
 permBtn.MouseButton1Click:Connect(function()
     setRandomQuote()
@@ -2824,7 +2824,7 @@ antiVoidBtn.MouseButton1Click:Connect(function()
 end)
 
 --=============================================================
--- ✅ CLEAR BUTTON v37
+-- ✅ CLEAR BUTTON v38
 --=============================================================
 clearBtn.MouseButton1Click:Connect(function()
     setRandomQuote()
@@ -2851,7 +2851,7 @@ clearBtn.MouseButton1Click:Connect(function()
 end)
 
 --=============================================================
--- ✅ MINIMIZAR BUTTON v37
+-- ✅ MINIMIZAR BUTTON v38
 --=============================================================
 local menuMinimizado = false
 local alturaOriginal = 320
@@ -3082,7 +3082,95 @@ end
 
 getgenv().RickPortalCleanup = fullCleanup
 
+--=============================================================
+-- ✅ CLOSE SESSION — Reseta TUDO antes de fechar
+--=============================================================
 closeBtn.MouseButton1Click:Connect(function()
+    setRandomQuote()
+
+    -- ✅ Feedback visual
+    local closeLbl = closeBtn:FindFirstChildOfClass("TextLabel")
+    if closeLbl then
+        closeLbl.Text = "✕ FECHANDO..."
+        closeLbl.TextColor3 = COR_VERMELHO
+    end
+
+    -- ✅ 1. Desativa Anti-Void se estiver ON
+    if antiVoidAtivo then
+        antiVoidAtivo = false
+        antiVoidBtn:SetAttribute("ActiveState", false)
+
+        local avLbl = antiVoidBtn:FindFirstChildOfClass("TextLabel")
+        if avLbl then
+            avLbl.Text = "▸ ANTI-VOID [OFF]"
+            avLbl.TextColor3 = COR_TEXTO
+        end
+        antiVoidBtn.BackgroundColor3 = COR_PANEL
+        if antiVoidStroke then
+            antiVoidStroke.Color = COR_CIANO
+            antiVoidStroke.Transparency = 0.4
+        end
+    end
+
+    -- ✅ 2. Desativa Anti-TP se estiver ON
+    if getgenv().AntiTP_Ativo then
+        getgenv().AntiTP_Ativo = false
+        antiTPBtn:SetAttribute("ActiveState", false)
+
+        local atpLbl = antiTPBtn:FindFirstChildOfClass("TextLabel")
+        if atpLbl then
+            atpLbl.Text = "▸ ANTI-TP [OFF]"
+            atpLbl.TextColor3 = COR_TEXTO
+        end
+        antiTPBtn.BackgroundColor3 = COR_PANEL
+        if antiTPStroke then
+            antiTPStroke.Color = COR_VERMELHO
+            antiTPStroke.Transparency = 0.4
+        end
+    end
+
+    -- ✅ 3. Desativa PERM se estiver ON
+    if permanenciaAtiva then
+        permanenciaAtiva = false
+        permBtn:SetAttribute("ActiveState", false)
+
+        local permLbl = permBtn:FindFirstChildOfClass("TextLabel")
+        if permLbl then
+            permLbl.Text = "▸ POSIÇÃO PERM [OFF]"
+            permLbl.TextColor3 = COR_TEXTO
+        end
+        permBtn.BackgroundColor3 = COR_PANEL
+        if permStroke then
+            permStroke.Color = COR_DOURADO_D
+            permStroke.Transparency = 0.4
+        end
+    end
+
+    -- ✅ 4. Fecha todos os portais normais
+    wipeAllPortals(true)
+
+    -- ✅ 5. Fecha portais de marcação (PERM incluso)
+    limparMarcacao(true)
+
+    -- ✅ 6. Fecha Void e CÉUS
+    deletarVoidPlace()
+    deletarLocalTP()
+    deletarCeuPlace()
+    deletarCeuLocalTP()
+
+    -- ✅ 7. Fecha player panel se estiver aberto
+    if panelOpen then
+        panelOpen = false
+        tpPlayerBtn:SetAttribute("ActiveState", false)
+        tpPlayerBtn.BackgroundColor3 = COR_PANEL
+        local tpLbl = tpPlayerBtn:FindFirstChildOfClass("TextLabel")
+        if tpLbl then tpLbl.TextColor3 = COR_TEXTO end
+    end
+
+    -- ✅ 8. Aguarda um pouco pra dar feedback visual
+    task.wait(0.4)
+
+    -- ✅ 9. Animação de saída
     local slideOutTween = TweenService:Create(
         mainFrame,
         TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.In),
@@ -3090,7 +3178,9 @@ closeBtn.MouseButton1Click:Connect(function()
     )
     slideOutTween:Play()
     slideOutTween.Completed:Wait()
+
+    -- ✅ 10. Cleanup final
     fullCleanup()
 end)
 
-print("✅ Prime Rick Portal GUI v37 — CÉUS com chão igual ao VOID 🌤️")
+print("✅ Prime Rick Portal GUI v38 — CLOSE SESSION reseta TUDO 🎯")
