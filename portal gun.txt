@@ -1,47 +1,90 @@
 --=============================================================
--- RICK PRIME v43.1 — Portal GUI + Random + Anti-TP + Anti-Void
+-- RICK PRIME v44 — Reescrita defensiva
+-- Menu aparece PRIMEIRO, depois as features são conectadas
 --=============================================================
-local CoreGui = game:GetService("CoreGui")
+
+--=============================================================
+-- ETAPA 1: PLAYER + GUI (cria e mostra IMEDIATAMENTE)
+--=============================================================
 local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+
+if not player then
+    warn("[RickPrime] Player não encontrado!")
+    return
+end
+
+local playerGui = player:WaitForChild("PlayerGui", 10)
+if not playerGui then
+    warn("[RickPrime] PlayerGui não encontrado!")
+    return
+end
+
+print("[RickPrime] PlayerGui OK:", playerGui:GetFullName())
+
+-- Cleanup de execução anterior (dentro do PlayerGui)
+for _, child in ipairs(playerGui:GetChildren()) do
+    if child.Name == "RickPrimeGUI_v44" or child.Name == "RickPrimeFX_v44" then
+        child:Destroy()
+    end
+end
+
+-- ScreenGui principal — PRIMEIRO
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "RickPrimeGUI_v44"
+screenGui.ResetOnSpawn = false
+screenGui.IgnoreGuiInset = true
+screenGui.DisplayOrder = 999999
+screenGui.Enabled = true
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.Parent = playerGui
+
+print("[RickPrime] ScreenGui criado:", screenGui:GetFullName())
+
+-- ScreenGui de efeitos
+local fxGui = Instance.new("ScreenGui")
+fxGui.Name = "RickPrimeFX_v44"
+fxGui.ResetOnSpawn = false
+fxGui.IgnoreGuiInset = true
+fxGui.DisplayOrder = 999998
+fxGui.Enabled = true
+fxGui.Parent = playerGui
+
+--=============================================================
+-- ETAPA 2: MAIN FRAME (cria e mostra ANTES de qualquer lógica)
+--=============================================================
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 100, 0, 340)
+mainFrame.Position = UDim2.new(0, 20, 0.35, -170)
+mainFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+mainFrame.BackgroundTransparency = 0
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Visible = true
+mainFrame.Parent = screenGui
+
+print("[RickPrime] MainFrame criado e visível")
+
+--=============================================================
+-- ETAPA 3: SERVICES E CONFIG (só depois do GUI estar visível)
+--=============================================================
 local TweenService = game:GetService("TweenService")
 local CollectionService = game:GetService("CollectionService")
 local SoundService = game:GetService("SoundService")
 local Lighting = game:GetService("Lighting")
 local RunService = game:GetService("RunService")
 local TeleportService = game:GetService("TeleportService")
-local player = Players.LocalPlayer
 
---=============================================================
--- ✅ FIX: resolver parent do GUI de forma bulletproof
---=============================================================
-local function getGuiParent()
-    local ok, hui = pcall(function()
-        if gethui then return gethui() end
-        return nil
-    end)
-    if ok and hui then return hui end
-
-    local ok2, cg = pcall(function()
-        return game:GetService("CoreGui")
-    end)
-    if ok2 and cg then
-        local ok3, _ = pcall(function()
-            local test = Instance.new("Folder")
-            test.Parent = cg
-            test:Destroy()
-        end)
-        if ok3 then return cg end
-    end
-
-    return player:WaitForChild("PlayerGui")
+-- Cleanup de execução anterior (global)
+if getgenv and getgenv().RickPortalCleanup then
+    pcall(getgenv().RickPortalCleanup)
 end
-
-local GUI_PARENT = getGuiParent()
-
--- ✅ Cleanup de execução anterior
-if getgenv().RickPortalCleanup then pcall(getgenv().RickPortalCleanup) end
-getgenv().AntiTP_Ativo = false
-getgenv().Marcacao_Ativo = false
+if getgenv then
+    getgenv().AntiTP_Ativo = false
+    getgenv().Marcacao_Ativo = false
+end
 
 for _, fx in ipairs(Lighting:GetChildren()) do
     if fx:IsA("BlurEffect") and fx.Name == "RP_Blur" then
@@ -140,15 +183,8 @@ local ATP = {
 local atpUltPos, atpUltimoCheck, atpCooldown, atpUltimoRespawn = nil, 0, false, 0
 
 --=============================================================
--- FX GUI
+-- FX FRAMES (no fxGui)
 --=============================================================
-local fxGui = Instance.new("ScreenGui")
-fxGui.Name = "RickPortalEffects"
-fxGui.ResetOnSpawn = false
-fxGui.IgnoreGuiInset = true
-fxGui.DisplayOrder = 999998
-fxGui.Parent = GUI_PARENT
-
 local function mkFrame(name, color, z)
     local f = Instance.new("Frame")
     f.Name = name
@@ -488,11 +524,317 @@ for _, tag in ipairs({TAG_GEN, TAG_M1, TAG_M2, TAG_VOID, TAG_CEU, TAG_RET, TAG_S
     end
 end
 
-pcall(function()
-    if GUI_PARENT:FindFirstChild("RickPortalGUI") then
-        GUI_PARENT.RickPortalGUI:Destroy()
+--=============================================================
+-- UI — resto do frame principal
+--=============================================================
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 2)
+mainCorner.Parent = mainFrame
+
+local mainStroke = Instance.new("UIStroke")
+mainStroke.Color = COR_LINHA_D
+mainStroke.Thickness = 1
+mainStroke.Transparency = 0.2
+mainStroke.Parent = mainFrame
+
+local function fazerCanto(posX, posY, offX, offY)
+    local cantoH = Instance.new("Frame")
+    cantoH.Size = UDim2.new(0, 10, 0, 1)
+    cantoH.Position = UDim2.new(posX.Scale, posX.Offset + offX, posY.Scale, posY.Offset)
+    cantoH.BackgroundColor3 = COR_LINHA
+    cantoH.BorderSizePixel = 0
+    cantoH.ZIndex = 5
+    cantoH.Parent = mainFrame
+
+    local cantoV = Instance.new("Frame")
+    cantoV.Size = UDim2.new(0, 1, 0, 10)
+    cantoV.Position = UDim2.new(posX.Scale, posX.Offset, posY.Scale, posY.Offset + offY)
+    cantoV.BackgroundColor3 = COR_LINHA
+    cantoV.BorderSizePixel = 0
+    cantoV.ZIndex = 5
+    cantoV.Parent = mainFrame
+end
+
+fazerCanto(UDim.new(0, 0), UDim.new(0, 0), 0, 0)
+fazerCanto(UDim.new(1, 0), UDim.new(0, 0), -10, 0)
+fazerCanto(UDim.new(0, 0), UDim.new(1, 0), 0, -10)
+fazerCanto(UDim.new(1, 0), UDim.new(1, 0), -10, -10)
+
+local innerScreen = Instance.new("Frame")
+innerScreen.Size = UDim2.new(1, -8, 1, -8)
+innerScreen.Position = UDim2.new(0, 4, 0, 4)
+innerScreen.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+innerScreen.BorderSizePixel = 0
+innerScreen.ClipsDescendants = false
+innerScreen.Parent = mainFrame
+
+local innerCorner = Instance.new("UICorner")
+innerCorner.CornerRadius = UDim.new(0, 2)
+innerCorner.Parent = innerScreen
+
+local innerStroke = Instance.new("UIStroke")
+innerStroke.Color = COR_LINHA
+innerStroke.Thickness = 1
+innerStroke.Transparency = 0.4
+innerStroke.Parent = innerScreen
+
+local statusBar = Instance.new("Frame")
+statusBar.Size = UDim2.new(1, 0, 0, 2)
+statusBar.BackgroundColor3 = COR_LINHA
+statusBar.BorderSizePixel = 0
+statusBar.ZIndex = 3
+statusBar.Parent = innerScreen
+
+local divTop = Instance.new("Frame")
+divTop.Size = UDim2.new(1, -8, 0, 1)
+divTop.Position = UDim2.new(0, 4, 0, 38)
+divTop.BackgroundColor3 = COR_LINHA_D
+divTop.BorderSizePixel = 0
+divTop.ZIndex = 3
+divTop.Parent = innerScreen
+
+local titleTag = Instance.new("TextLabel")
+titleTag.Size = UDim2.new(1, -10, 0, 8)
+titleTag.Position = UDim2.new(0, 5, 0, 5)
+titleTag.BackgroundTransparency = 1
+titleTag.Text = "▰ PRIME OS // v44.0"
+titleTag.TextColor3 = COR_CIANO
+titleTag.Font = Enum.Font.Code
+titleTag.TextSize = 6
+titleTag.TextXAlignment = Enum.TextXAlignment.Left
+titleTag.ZIndex = 4
+titleTag.Parent = innerScreen
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -10, 0, 12)
+title.Position = UDim2.new(0, 5, 0, 12)
+title.BackgroundTransparency = 1
+title.Text = "RICK PRIME"
+title.TextColor3 = COR_LINHA
+title.Font = Enum.Font.GothamBlack
+title.TextSize = 10
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.ZIndex = 4
+title.Parent = innerScreen
+
+local liveDot = Instance.new("Frame")
+liveDot.Size = UDim2.new(0, 5, 0, 5)
+liveDot.Position = UDim2.new(1, -14, 0, 5)
+liveDot.BackgroundColor3 = COR_VERMELHO
+liveDot.BorderSizePixel = 0
+liveDot.ZIndex = 4
+liveDot.Parent = innerScreen
+
+local liveDotCorner = Instance.new("UICorner")
+liveDotCorner.CornerRadius = UDim.new(1, 0)
+liveDotCorner.Parent = liveDot
+
+local liveDotStroke = Instance.new("UIStroke")
+liveDotStroke.Color = Color3.fromRGB(255, 100, 100)
+liveDotStroke.Thickness = 1
+liveDotStroke.Transparency = 0.5
+liveDotStroke.Parent = liveDot
+
+task.spawn(function()
+    while liveDot and liveDot.Parent do
+        liveDot.BackgroundTransparency = 0
+        liveDotStroke.Transparency = 0.2
+        task.wait(0.6)
+        if not (liveDot and liveDot.Parent) then break end
+        liveDot.BackgroundTransparency = 0.7
+        liveDotStroke.Transparency = 0.8
+        task.wait(0.6)
     end
 end)
+
+local quoteLabel = Instance.new("TextLabel")
+quoteLabel.Size = UDim2.new(0.9, 0, 0, 9)
+quoteLabel.Position = UDim2.new(0.05, 0, 0, 27)
+quoteLabel.BackgroundTransparency = 1
+quoteLabel.Text = "// WUBBA LUBBA DUB DUB_"
+quoteLabel.TextColor3 = COR_TEXTO_D
+quoteLabel.Font = Enum.Font.Code
+quoteLabel.TextSize = 5
+quoteLabel.TextXAlignment = Enum.TextXAlignment.Left
+quoteLabel.ZIndex = 4
+quoteLabel.Parent = innerScreen
+
+local rickQuotes = {
+    "// WUBBA LUBBA DUB DUB_",
+    "// I'M SCRIPT RICK_",
+    "// NOBODY EXISTS ON PURPOSE_",
+    "// TO LIVE IS TO RISK IT ALL_",
+    "// GRAB THE PORTAL GUN_",
+    "// EXISTENCE IS PAIN_",
+    "// SCIENCE IS ART_",
+    "// BOOM! DIMENSIONAL TRAVELERS_",
+}
+
+local function setRandomQuote()
+    quoteLabel.Text = rickQuotes[math.random(1, #rickQuotes)]
+end
+
+--=============================================================
+-- ESTADOS
+--=============================================================
+local panelOpen = false
+local playerBtns = {}
+local filtroAtivo = ""
+local modoFavorito = false
+local favoritos = {}
+
+local permanenciaAtiva = false
+local marcacaoP1Perm = nil
+
+local panelTween = nil
+local refreshLock = false
+local refreshAgendado = false
+
+--=============================================================
+-- createButton
+--=============================================================
+local function createButton(text, yPos, iconeCor, semHover)
+    iconeCor = iconeCor or COR_LINHA
+
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0.9, 0, 0, 16)
+    btn.Position = UDim2.new(0.05, 0, 0, yPos)
+    btn.BackgroundColor3 = COR_PANEL
+    btn.BackgroundTransparency = 0.15
+    btn.Text = ""
+    btn.AutoButtonColor = false
+    btn.BorderSizePixel = 0
+    btn.ZIndex = 4
+    btn.Parent = innerScreen
+
+    local bc = Instance.new("UICorner")
+    bc.CornerRadius = UDim.new(0, 2)
+    bc.Parent = btn
+
+    local bs = Instance.new("UIStroke")
+    bs.Color = COR_LINHA_D
+    bs.Thickness = 1
+    bs.Transparency = 0.5
+    bs.Parent = btn
+
+    local accent = Instance.new("Frame")
+    accent.Size = UDim2.new(0, 2, 1, -6)
+    accent.Position = UDim2.new(0, 0, 0, 3)
+    accent.BackgroundColor3 = iconeCor
+    accent.BorderSizePixel = 0
+    accent.ZIndex = 5
+    accent.Parent = btn
+
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(1, -12, 1, 0)
+    lbl.Position = UDim2.new(0, 10, 0, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = text
+    lbl.TextColor3 = COR_TEXTO
+    lbl.Font = Enum.Font.Code
+    lbl.TextSize = 6
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.ZIndex = 5
+    lbl.Parent = btn
+
+    if not semHover then
+        btn.MouseEnter:Connect(function()
+            if not btn:GetAttribute("ActiveState") then
+                btn.BackgroundColor3 = Color3.fromRGB(20, 30, 24)
+                bs.Color = COR_LINHA
+                bs.Transparency = 0.2
+                accent.BackgroundColor3 = COR_GLOW
+            end
+        end)
+
+        btn.MouseLeave:Connect(function()
+            if not btn:GetAttribute("ActiveState") then
+                btn.BackgroundColor3 = COR_PANEL
+                bs.Color = COR_LINHA_D
+                bs.Transparency = 0.5
+                accent.BackgroundColor3 = iconeCor
+            end
+        end)
+    end
+
+    return btn
+end
+
+--=============================================================
+-- BOTÕES
+--=============================================================
+local tpPlayerBtn  = createButton("▸ SELECT TARGET", 44, COR_LINHA)
+local clearBtn     = createButton("▸ CLEAR PORTALS", 62, COR_CIANO)
+local voidBtn      = createButton("▸ VOID DIMENSION", 80, COR_VERMELHO)
+local ceusBtn      = createButton("▸ CEUS", 98, COR_CIANO, true)
+local randomBtn    = createButton("▸ RANDOM", 116, COR_DOURADO)
+local marcacaoBtn  = createButton("▸ MARCACAO [0/2]", 134, Color3.fromRGB(255, 180, 40))
+local permBtn      = createButton("▸ POSICAO PERM [OFF]", 152, COR_DOURADO)
+local antiTPBtn    = createButton("▸ ANTI-TP [OFF]", 170, COR_VERMELHO)
+local antiVoidBtn  = createButton("▸ ANTI-VOID [OFF]", 188, COR_CIANO)
+local minimizarBtn = createButton("▾ MINIMIZAR", 210, COR_CIANO)
+local rejoinBtn    = createButton("↻ REJOIN", 228, COR_DOURADO)
+local closeBtn     = createButton("✕ CLOSE SESSION", 252, COR_VERMELHO)
+
+print("[RickPrime] Botões criados:", 12)
+
+local closeStroke    = closeBtn:FindFirstChildOfClass("UIStroke")
+local voidStroke     = voidBtn:FindFirstChildOfClass("UIStroke")
+local marcacaoStroke = marcacaoBtn:FindFirstChildOfClass("UIStroke")
+local antiTPStroke   = antiTPBtn:FindFirstChildOfClass("UIStroke")
+local permStroke     = permBtn:FindFirstChildOfClass("UIStroke")
+local antiVoidStroke = antiVoidBtn:FindFirstChildOfClass("UIStroke")
+local minimizarStroke = minimizarBtn:FindFirstChildOfClass("UIStroke")
+local rejoinStroke    = rejoinBtn:FindFirstChildOfClass("UIStroke")
+local ceusStroke      = ceusBtn:FindFirstChildOfClass("UIStroke")
+local randomStroke    = randomBtn:FindFirstChildOfClass("UIStroke")
+
+if voidStroke then voidStroke.Color = COR_VERMELHO voidStroke.Transparency = 0.3 end
+if marcacaoStroke then marcacaoStroke.Color = Color3.fromRGB(180, 130, 0) marcacaoStroke.Transparency = 0.4 end
+if antiTPStroke then antiTPStroke.Color = COR_VERMELHO antiTPStroke.Transparency = 0.4 end
+if closeStroke then closeStroke.Color = COR_VERMELHO closeStroke.Transparency = 0.2 end
+if permStroke then permStroke.Color = COR_DOURADO_D permStroke.Transparency = 0.4 end
+if antiVoidStroke then antiVoidStroke.Color = COR_CIANO antiVoidStroke.Transparency = 0.4 end
+if minimizarStroke then minimizarStroke.Color = COR_CIANO minimizarStroke.Transparency = 0.4 end
+if rejoinStroke then rejoinStroke.Color = COR_DOURADO_D rejoinStroke.Transparency = 0.4 end
+if randomStroke then randomStroke.Color = COR_DOURADO_D randomStroke.Transparency = 0.3 end
+
+ceusBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+ceusBtn.BackgroundTransparency = 0
+
+local ceusLbl = ceusBtn:FindFirstChildOfClass("TextLabel")
+if ceusLbl then ceusLbl.TextColor3 = COR_CIANO end
+
+if ceusStroke then
+    ceusStroke.Color = COR_CIANO
+    ceusStroke.Transparency = 0.2
+end
+
+local ceusAccent = ceusBtn:FindFirstChild("Frame")
+if ceusAccent and ceusAccent:IsA("Frame") then
+    ceusAccent.BackgroundColor3 = COR_CIANO
+end
+
+ceusBtn.MouseEnter:Connect(function()
+    ceusBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+end)
+
+ceusBtn.MouseLeave:Connect(function()
+    ceusBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+end)
+
+local footerLabel = Instance.new("TextLabel")
+footerLabel.Size = UDim2.new(1, -8, 0, 8)
+footerLabel.Position = UDim2.new(0, 4, 1, -10)
+footerLabel.BackgroundTransparency = 1
+footerLabel.Text = "PRIME RICK — C-137"
+footerLabel.TextColor3 = COR_TEXTO_D
+footerLabel.Font = Enum.Font.Code
+footerLabel.TextSize = 5
+footerLabel.ZIndex = 4
+footerLabel.Parent = innerScreen
+
+print("[RickPrime] UI construída com sucesso")
 
 --=============================================================
 -- VOID / CÉUS setup
@@ -716,333 +1058,6 @@ local function monitorarSaidaDoCeu()
         end
     end)
 end
-
---=============================================================
--- UI — FRAME PRINCIPAL
---=============================================================
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "RickPortalGUI"
-screenGui.ResetOnSpawn = false
-screenGui.IgnoreGuiInset = true
-screenGui.DisplayOrder = 999999
-screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-screenGui.Parent = GUI_PARENT
-
-local mainFrame = Instance.new("Frame")
-mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 100, 0, 340)
-mainFrame.Position = UDim2.new(0, 20, 0.35, -170)
-mainFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-mainFrame.BorderSizePixel = 0
-mainFrame.Active = true
-mainFrame.Draggable = true
-mainFrame.Visible = true
-mainFrame.Parent = screenGui
-
-local mainCorner = Instance.new("UICorner")
-mainCorner.CornerRadius = UDim.new(0, 2)
-mainCorner.Parent = mainFrame
-
-local mainStroke = Instance.new("UIStroke")
-mainStroke.Color = COR_LINHA_D
-mainStroke.Thickness = 1
-mainStroke.Transparency = 0.2
-mainStroke.Parent = mainFrame
-
-local function fazerCanto(posX, posY, offX, offY)
-    local cantoH = Instance.new("Frame")
-    cantoH.Size = UDim2.new(0, 10, 0, 1)
-    cantoH.Position = UDim2.new(posX.Scale, posX.Offset + offX, posY.Scale, posY.Offset)
-    cantoH.BackgroundColor3 = COR_LINHA
-    cantoH.BorderSizePixel = 0
-    cantoH.ZIndex = 5
-    cantoH.Parent = mainFrame
-
-    local cantoV = Instance.new("Frame")
-    cantoV.Size = UDim2.new(0, 1, 0, 10)
-    cantoV.Position = UDim2.new(posX.Scale, posX.Offset, posY.Scale, posY.Offset + offY)
-    cantoV.BackgroundColor3 = COR_LINHA
-    cantoV.BorderSizePixel = 0
-    cantoV.ZIndex = 5
-    cantoV.Parent = mainFrame
-end
-
-fazerCanto(UDim.new(0, 0), UDim.new(0, 0), 0, 0)
-fazerCanto(UDim.new(1, 0), UDim.new(0, 0), -10, 0)
-fazerCanto(UDim.new(0, 0), UDim.new(1, 0), 0, -10)
-fazerCanto(UDim.new(1, 0), UDim.new(1, 0), -10, -10)
-
-local innerScreen = Instance.new("Frame")
-innerScreen.Size = UDim2.new(1, -8, 1, -8)
-innerScreen.Position = UDim2.new(0, 4, 0, 4)
-innerScreen.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-innerScreen.BorderSizePixel = 0
-innerScreen.ClipsDescendants = false
-innerScreen.Parent = mainFrame
-
-local innerCorner = Instance.new("UICorner")
-innerCorner.CornerRadius = UDim.new(0, 2)
-innerCorner.Parent = innerScreen
-
-local innerStroke = Instance.new("UIStroke")
-innerStroke.Color = COR_LINHA
-innerStroke.Thickness = 1
-innerStroke.Transparency = 0.4
-innerStroke.Parent = innerScreen
-
-local statusBar = Instance.new("Frame")
-statusBar.Size = UDim2.new(1, 0, 0, 2)
-statusBar.BackgroundColor3 = COR_LINHA
-statusBar.BorderSizePixel = 0
-statusBar.ZIndex = 3
-statusBar.Parent = innerScreen
-
-local divTop = Instance.new("Frame")
-divTop.Size = UDim2.new(1, -8, 0, 1)
-divTop.Position = UDim2.new(0, 4, 0, 38)
-divTop.BackgroundColor3 = COR_LINHA_D
-divTop.BorderSizePixel = 0
-divTop.ZIndex = 3
-divTop.Parent = innerScreen
-
-local titleTag = Instance.new("TextLabel")
-titleTag.Size = UDim2.new(1, -10, 0, 8)
-titleTag.Position = UDim2.new(0, 5, 0, 5)
-titleTag.BackgroundTransparency = 1
-titleTag.Text = "▰ PRIME OS // v43.1"
-titleTag.TextColor3 = COR_CIANO
-titleTag.Font = Enum.Font.Code
-titleTag.TextSize = 6
-titleTag.TextXAlignment = Enum.TextXAlignment.Left
-titleTag.ZIndex = 4
-titleTag.Parent = innerScreen
-
-local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, -10, 0, 12)
-title.Position = UDim2.new(0, 5, 0, 12)
-title.BackgroundTransparency = 1
-title.Text = "RICK PRIME"
-title.TextColor3 = COR_LINHA
-title.Font = Enum.Font.GothamBlack
-title.TextSize = 10
-title.TextXAlignment = Enum.TextXAlignment.Left
-title.ZIndex = 4
-title.Parent = innerScreen
-
-local liveDot = Instance.new("Frame")
-liveDot.Size = UDim2.new(0, 5, 0, 5)
-liveDot.Position = UDim2.new(1, -14, 0, 5)
-liveDot.BackgroundColor3 = COR_VERMELHO
-liveDot.BorderSizePixel = 0
-liveDot.ZIndex = 4
-liveDot.Parent = innerScreen
-
-local liveDotCorner = Instance.new("UICorner")
-liveDotCorner.CornerRadius = UDim.new(1, 0)
-liveDotCorner.Parent = liveDot
-
-local liveDotStroke = Instance.new("UIStroke")
-liveDotStroke.Color = Color3.fromRGB(255, 100, 100)
-liveDotStroke.Thickness = 1
-liveDotStroke.Transparency = 0.5
-liveDotStroke.Parent = liveDot
-
-task.spawn(function()
-    while liveDot and liveDot.Parent do
-        liveDot.BackgroundTransparency = 0
-        liveDotStroke.Transparency = 0.2
-        task.wait(0.6)
-        if not (liveDot and liveDot.Parent) then break end
-        liveDot.BackgroundTransparency = 0.7
-        liveDotStroke.Transparency = 0.8
-        task.wait(0.6)
-    end
-end)
-
-local quoteLabel = Instance.new("TextLabel")
-quoteLabel.Size = UDim2.new(0.9, 0, 0, 9)
-quoteLabel.Position = UDim2.new(0.05, 0, 0, 27)
-quoteLabel.BackgroundTransparency = 1
-quoteLabel.Text = "// WUBBA LUBBA DUB DUB_"
-quoteLabel.TextColor3 = COR_TEXTO_D
-quoteLabel.Font = Enum.Font.Code
-quoteLabel.TextSize = 5
-quoteLabel.TextXAlignment = Enum.TextXAlignment.Left
-quoteLabel.ZIndex = 4
-quoteLabel.Parent = innerScreen
-
-local rickQuotes = {
-    "// WUBBA LUBBA DUB DUB_",
-    "// I'M SCRIPT RICK_",
-    "// NOBODY EXISTS ON PURPOSE_",
-    "// TO LIVE IS TO RISK IT ALL_",
-    "// GRAB THE PORTAL GUN_",
-    "// EXISTENCE IS PAIN_",
-    "// SCIENCE IS ART_",
-    "// BOOM! DIMENSIONAL TRAVELERS_",
-}
-
-local function setRandomQuote()
-    quoteLabel.Text = rickQuotes[math.random(1, #rickQuotes)]
-end
-
---=============================================================
--- ESTADOS
---=============================================================
-local panelOpen = false
-local playerBtns = {}
-local filtroAtivo = ""
-local modoFavorito = false
-local favoritos = {}
-
-local permanenciaAtiva = false
-local marcacaoP1Perm = nil
-
-local panelTween = nil
-local refreshLock = false
-local refreshAgendado = false
-
---=============================================================
--- createButton
---=============================================================
-local function createButton(text, yPos, iconeCor, semHover)
-    iconeCor = iconeCor or COR_LINHA
-
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0.9, 0, 0, 16)
-    btn.Position = UDim2.new(0.05, 0, 0, yPos)
-    btn.BackgroundColor3 = COR_PANEL
-    btn.BackgroundTransparency = 0.15
-    btn.Text = ""
-    btn.AutoButtonColor = false
-    btn.BorderSizePixel = 0
-    btn.ZIndex = 4
-    btn.Parent = innerScreen
-
-    local bc = Instance.new("UICorner")
-    bc.CornerRadius = UDim.new(0, 2)
-    bc.Parent = btn
-
-    local bs = Instance.new("UIStroke")
-    bs.Color = COR_LINHA_D
-    bs.Thickness = 1
-    bs.Transparency = 0.5
-    bs.Parent = btn
-
-    local accent = Instance.new("Frame")
-    accent.Size = UDim2.new(0, 2, 1, -6)
-    accent.Position = UDim2.new(0, 0, 0, 3)
-    accent.BackgroundColor3 = iconeCor
-    accent.BorderSizePixel = 0
-    accent.ZIndex = 5
-    accent.Parent = btn
-
-    local lbl = Instance.new("TextLabel")
-    lbl.Size = UDim2.new(1, -12, 1, 0)
-    lbl.Position = UDim2.new(0, 10, 0, 0)
-    lbl.BackgroundTransparency = 1
-    lbl.Text = text
-    lbl.TextColor3 = COR_TEXTO
-    lbl.Font = Enum.Font.Code
-    lbl.TextSize = 6
-    lbl.TextXAlignment = Enum.TextXAlignment.Left
-    lbl.ZIndex = 5
-    lbl.Parent = btn
-
-    if not semHover then
-        btn.MouseEnter:Connect(function()
-            if not btn:GetAttribute("ActiveState") then
-                btn.BackgroundColor3 = Color3.fromRGB(20, 30, 24)
-                bs.Color = COR_LINHA
-                bs.Transparency = 0.2
-                accent.BackgroundColor3 = COR_GLOW
-            end
-        end)
-
-        btn.MouseLeave:Connect(function()
-            if not btn:GetAttribute("ActiveState") then
-                btn.BackgroundColor3 = COR_PANEL
-                bs.Color = COR_LINHA_D
-                bs.Transparency = 0.5
-                accent.BackgroundColor3 = iconeCor
-            end
-        end)
-    end
-
-    return btn
-end
-
---=============================================================
--- BOTÕES
---=============================================================
-local tpPlayerBtn  = createButton("▸ SELECT TARGET", 44, COR_LINHA)
-local clearBtn     = createButton("▸ CLEAR PORTALS", 62, COR_CIANO)
-local voidBtn      = createButton("▸ VOID DIMENSION", 80, COR_VERMELHO)
-local ceusBtn      = createButton("▸ CEUS", 98, COR_CIANO, true)
-local randomBtn    = createButton("▸ RANDOM", 116, COR_DOURADO)
-local marcacaoBtn  = createButton("▸ MARCACAO [0/2]", 134, Color3.fromRGB(255, 180, 40))
-local permBtn      = createButton("▸ POSICAO PERM [OFF]", 152, COR_DOURADO)
-local antiTPBtn    = createButton("▸ ANTI-TP [OFF]", 170, COR_VERMELHO)
-local antiVoidBtn  = createButton("▸ ANTI-VOID [OFF]", 188, COR_CIANO)
-local minimizarBtn = createButton("▾ MINIMIZAR", 210, COR_CIANO)
-local rejoinBtn    = createButton("↻ REJOIN", 228, COR_DOURADO)
-local closeBtn     = createButton("✕ CLOSE SESSION", 252, COR_VERMELHO)
-
-local closeStroke    = closeBtn:FindFirstChildOfClass("UIStroke")
-local voidStroke     = voidBtn:FindFirstChildOfClass("UIStroke")
-local marcacaoStroke = marcacaoBtn:FindFirstChildOfClass("UIStroke")
-local antiTPStroke   = antiTPBtn:FindFirstChildOfClass("UIStroke")
-local permStroke     = permBtn:FindFirstChildOfClass("UIStroke")
-local antiVoidStroke = antiVoidBtn:FindFirstChildOfClass("UIStroke")
-local minimizarStroke = minimizarBtn:FindFirstChildOfClass("UIStroke")
-local rejoinStroke    = rejoinBtn:FindFirstChildOfClass("UIStroke")
-local ceusStroke      = ceusBtn:FindFirstChildOfClass("UIStroke")
-local randomStroke    = randomBtn:FindFirstChildOfClass("UIStroke")
-
-if voidStroke then voidStroke.Color = COR_VERMELHO voidStroke.Transparency = 0.3 end
-if marcacaoStroke then marcacaoStroke.Color = Color3.fromRGB(180, 130, 0) marcacaoStroke.Transparency = 0.4 end
-if antiTPStroke then antiTPStroke.Color = COR_VERMELHO antiTPStroke.Transparency = 0.4 end
-if closeStroke then closeStroke.Color = COR_VERMELHO closeStroke.Transparency = 0.2 end
-if permStroke then permStroke.Color = COR_DOURADO_D permStroke.Transparency = 0.4 end
-if antiVoidStroke then antiVoidStroke.Color = COR_CIANO antiVoidStroke.Transparency = 0.4 end
-if minimizarStroke then minimizarStroke.Color = COR_CIANO minimizarStroke.Transparency = 0.4 end
-if rejoinStroke then rejoinStroke.Color = COR_DOURADO_D rejoinStroke.Transparency = 0.4 end
-if randomStroke then randomStroke.Color = COR_DOURADO_D randomStroke.Transparency = 0.3 end
-
-ceusBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-ceusBtn.BackgroundTransparency = 0
-
-local ceusLbl = ceusBtn:FindFirstChildOfClass("TextLabel")
-if ceusLbl then ceusLbl.TextColor3 = COR_CIANO end
-
-if ceusStroke then
-    ceusStroke.Color = COR_CIANO
-    ceusStroke.Transparency = 0.2
-end
-
-local ceusAccent = ceusBtn:FindFirstChild("Frame")
-if ceusAccent and ceusAccent:IsA("Frame") then
-    ceusAccent.BackgroundColor3 = COR_CIANO
-end
-
-ceusBtn.MouseEnter:Connect(function()
-    ceusBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-end)
-
-ceusBtn.MouseLeave:Connect(function()
-    ceusBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-end)
-
-local footerLabel = Instance.new("TextLabel")
-footerLabel.Size = UDim2.new(1, -8, 0, 8)
-footerLabel.Position = UDim2.new(0, 4, 1, -10)
-footerLabel.BackgroundTransparency = 1
-footerLabel.Text = "PRIME RICK — C-137"
-footerLabel.TextColor3 = COR_TEXTO_D
-footerLabel.Font = Enum.Font.Code
-footerLabel.TextSize = 5
-footerLabel.ZIndex = 4
-footerLabel.Parent = innerScreen
 
 --=============================================================
 -- PLAYER PANEL
@@ -1272,9 +1287,6 @@ local function createPortalInstance(cframe, tag, opcoes)
     return portalPart, fFront, bFront
 end
 
---=============================================================
--- PORTAL DE SAÍDA
---=============================================================
 local function spawnPortalSaida(char)
     if not char or not char.Parent then return end
     local root = char:FindFirstChild("HumanoidRootPart")
@@ -1365,7 +1377,7 @@ local function atualizarLabelMarcacao()
             end
             marcacaoBtn:SetAttribute("ActiveState", 1)
         end
-        getgenv().Marcacao_Ativo = true
+        if getgenv then getgenv().Marcacao_Ativo = true end
     else
         local temP1 = marcacaoP1 and marcacaoP1.Parent
         local temP2 = marcacaoP2 and marcacaoP2.Parent
@@ -1381,7 +1393,7 @@ local function atualizarLabelMarcacao()
                 marcacaoStroke.Transparency = 0.1
             end
             marcacaoBtn:SetAttribute("ActiveState", 2)
-            getgenv().Marcacao_Ativo = true
+            if getgenv then getgenv().Marcacao_Ativo = true end
         elseif temP1 then
             if lbl then
                 lbl.Text = "▸ MARCACAO [1/2]"
@@ -1393,7 +1405,7 @@ local function atualizarLabelMarcacao()
                 marcacaoStroke.Transparency = 0.1
             end
             marcacaoBtn:SetAttribute("ActiveState", 1)
-            getgenv().Marcacao_Ativo = true
+            if getgenv then getgenv().Marcacao_Ativo = true end
         else
             if lbl then
                 lbl.Text = "▸ MARCACAO [0/2]"
@@ -1405,7 +1417,7 @@ local function atualizarLabelMarcacao()
                 marcacaoStroke.Transparency = 0.4
             end
             marcacaoBtn:SetAttribute("ActiveState", 0)
-            getgenv().Marcacao_Ativo = false
+            if getgenv then getgenv().Marcacao_Ativo = false end
         end
     end
 end
@@ -2424,7 +2436,7 @@ antiTPBtn.MouseButton1Click:Connect(function()
     setRandomQuote()
     local ativo = not antiTPBtn:GetAttribute("ActiveState")
     antiTPBtn:SetAttribute("ActiveState", ativo)
-    getgenv().AntiTP_Ativo = ativo
+    if getgenv then getgenv().AntiTP_Ativo = ativo end
 
     local lbl = antiTPBtn:FindFirstChildOfClass("TextLabel")
 
@@ -2453,10 +2465,10 @@ antiTPBtn.MouseButton1Click:Connect(function()
 end)
 
 RunService.Heartbeat:Connect(function()
-    if not getgenv().AntiTP_Ativo then return end
+    if not (getgenv and getgenv().AntiTP_Ativo) then return end
 
-    if getgenv().AntiTP_IgnorarProximo then
-        getgenv().AntiTP_IgnorarProximo = false
+    if getgenv.AntiTP_IgnorarProximo then
+        getgenv.AntiTP_IgnorarProximo = false
         local c = player.Character
         local h = c and c:FindFirstChild("HumanoidRootPart")
         atpUltPos = h and h.Position or nil
@@ -2513,7 +2525,7 @@ RunService.Heartbeat:Connect(function()
 end)
 
 player.CharacterAdded:Connect(function()
-    if not getgenv().AntiTP_Ativo then return end
+    if not (getgenv and getgenv().AntiTP_Ativo) then return end
     atpUltPos = nil
     atpUltimoCheck = 0
     atpUltimoRespawn = os.clock()
@@ -2710,7 +2722,7 @@ end
 local function avTeleportarParaSuperficie(character)
     if avTpCooldown then return end
     avTpCooldown = true
-    getgenv().AntiTP_IgnorarProximo = true
+    if getgenv then getgenv().AntiTP_IgnorarProximo = true end
 
     avTempoCaindo = 0
     avUltimoTempo = os.clock()
@@ -2741,7 +2753,7 @@ local function avTeleportarParaSuperficie(character)
     if not sucesso then warn("[AntiVoid] erro no TP:", erro) end
 
     task.delay(0.2, function()
-        getgenv().AntiTP_IgnorarProximo = false
+        if getgenv then getgenv().AntiTP_IgnorarProximo = false end
     end)
 
     local cooldown = avLocalSeguroAtivo and 0.3 or 1.5
@@ -3139,8 +3151,10 @@ end)
 -- CLEANUP
 --=============================================================
 local function fullCleanup()
-    getgenv().AntiTP_Ativo = false
-    getgenv().Marcacao_Ativo = false
+    if getgenv then
+        getgenv().AntiTP_Ativo = false
+        getgenv().Marcacao_Ativo = false
+    end
     antiVoidAtivo = false
 
     pcall(wipePortalsPorTag, TAG_GEN, true)
@@ -3175,10 +3189,10 @@ local function fullCleanup()
     if screenGui and screenGui.Parent then screenGui:Destroy() end
     if fxGui and fxGui.Parent then fxGui:Destroy() end
 
-    getgenv().RickPortalCleanup = nil
+    if getgenv then getgenv().RickPortalCleanup = nil end
 end
 
-getgenv().RickPortalCleanup = fullCleanup
+if getgenv then getgenv().RickPortalCleanup = fullCleanup end
 
 --=============================================================
 -- CLOSE
@@ -3192,8 +3206,10 @@ closeBtn.MouseButton1Click:Connect(function()
         closeLbl.TextColor3 = COR_VERMELHO
     end
 
-    getgenv().AntiTP_Ativo = false
-    getgenv().Marcacao_Ativo = false
+    if getgenv then
+        getgenv().AntiTP_Ativo = false
+        getgenv().Marcacao_Ativo = false
+    end
     antiVoidAtivo = false
 
     wipeAllPortals(true)
@@ -3216,9 +3232,9 @@ closeBtn.MouseButton1Click:Connect(function()
         {Position = UDim2.new(0, -150, 0.35, -170)}
     )
     slideOutTween:Play()
-    slideOutTween:Completed:Wait()
+    slideOutTween.Completed:Wait()
 
     fullCleanup()
 end)
 
-print("✅ Rick Prime v43.1 — Menu fixado + RANDOM abaixo do CEUS 🎯")
+print("[RickPrime] ✅ v44 PRONTO — Menu visível, botão RANDOM abaixo de CEUS")
