@@ -1,6 +1,6 @@
 --=============================================================
--- RICK PRIME — Portal GUI + Marcação + Anti-TP (v19)
--- Estilo Tech / HUD Sci-Fi — TP virado pro alvo
+-- RICK PRIME — Portal GUI + Marcação + Anti-TP (v20)
+-- Estilo Tech / HUD Sci-Fi — Sistema de Favoritos ♾
 --=============================================================
 local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
@@ -55,6 +55,8 @@ local COR_VERMELHO = Color3.fromRGB(200, 30, 40)
 local COR_TEXTO    = Color3.fromRGB(160, 255, 180)
 local COR_TEXTO_D  = Color3.fromRGB(80, 140, 90)
 local COR_GLOW     = Color3.fromRGB(0, 255, 130)
+local COR_DOURADO  = Color3.fromRGB(255, 200, 50)
+local COR_DOURADO_D = Color3.fromRGB(180, 140, 30)
 
 --=============================================================
 -- ANTI-TP
@@ -653,7 +655,7 @@ local titleTag = Instance.new("TextLabel")
 titleTag.Size = UDim2.new(1, -10, 0, 8)
 titleTag.Position = UDim2.new(0, 5, 0, 5)
 titleTag.BackgroundTransparency = 1
-titleTag.Text = "▰ PRIME OS // v19.0"
+titleTag.Text = "▰ PRIME OS // v20.0"
 titleTag.TextColor3 = COR_CIANO
 titleTag.Font = Enum.Font.Code
 titleTag.TextSize = 6
@@ -878,7 +880,7 @@ pInnerCorner.CornerRadius = UDim.new(0, 2)
 pInnerCorner.Parent = panelInner
 
 local panelTitle = Instance.new("TextLabel")
-panelTitle.Size = UDim2.new(1, -30, 0, 13)
+panelTitle.Size = UDim2.new(1, -54, 0, 13)
 panelTitle.BackgroundTransparency = 1
 panelTitle.Text = "▰ TARGETS"
 panelTitle.TextColor3 = COR_LINHA
@@ -889,6 +891,32 @@ panelTitle.Position = UDim2.new(0, 4, 0, 0)
 panelTitle.ZIndex = 4
 panelTitle.Parent = panelInner
 
+-- ♾ BOTÃO FAVORITOS
+local favBtn = Instance.new("TextButton")
+favBtn.Name = "FavBtn"
+favBtn.Size = UDim2.new(0, 20, 0, 13)
+favBtn.Position = UDim2.new(1, -46, 0, 0)
+favBtn.BackgroundColor3 = COR_PANEL
+favBtn.Text = "♾"
+favBtn.TextColor3 = COR_TEXTO_D
+favBtn.Font = Enum.Font.Code
+favBtn.TextSize = 11
+favBtn.AutoButtonColor = false
+favBtn.BorderSizePixel = 0
+favBtn.ZIndex = 4
+favBtn.Parent = panelInner
+
+local favCorner = Instance.new("UICorner")
+favCorner.CornerRadius = UDim.new(0, 2)
+favCorner.Parent = favBtn
+
+local favStroke = Instance.new("UIStroke")
+favStroke.Color = COR_LINHA_D
+favStroke.Thickness = 1
+favStroke.Transparency = 0.3
+favStroke.Parent = favBtn
+
+-- 🔄 BOTÃO REFRESH
 local refreshBtn = Instance.new("TextButton")
 refreshBtn.Name = "RefreshBtn"
 refreshBtn.Size = UDim2.new(0, 20, 0, 13)
@@ -925,6 +953,23 @@ refreshBtn.MouseLeave:Connect(function()
     refreshStroke.Transparency = 0.3
 end)
 
+favBtn.MouseEnter:Connect(function()
+    if not modoFavorito then
+        favBtn.BackgroundColor3 = Color3.fromRGB(20, 30, 24)
+        favStroke.Color = COR_LINHA
+        favStroke.Transparency = 0.1
+    end
+end)
+
+favBtn.MouseLeave:Connect(function()
+    if not modoFavorito then
+        favBtn.BackgroundColor3 = COR_PANEL
+        favStroke.Color = COR_LINHA_D
+        favStroke.Transparency = 0.3
+    end
+end)
+
+-- 🔍 SEARCH BOX
 local searchBox = Instance.new("TextBox")
 searchBox.Name = "SearchBox"
 searchBox.Size = UDim2.new(1, -8, 0, 15)
@@ -982,6 +1027,8 @@ uiListLayout.Parent = scrollingList
 local panelOpen = false
 local playerBtns = {}
 local filtroAtivo = ""
+local modoFavorito = false
+local favoritos = {}
 
 --=============================================================
 -- PORTAL INSTANCE
@@ -1082,7 +1129,7 @@ local function createPortalInstance(cframe, tag, opcoes)
 end
 
 --=============================================================
--- 🌀 PORTAL DE SAÍDA (nas costas, com rotação)
+-- 🌀 PORTAL DE SAÍDA
 --=============================================================
 local function spawnPortalSaida(char)
     if not char or not char.Parent then return end
@@ -1326,19 +1373,36 @@ end
 -- PLAYER LIST
 --=============================================================
 local function atualizarVisibilidade()
-    local count = 0
+    local btns = {}
     for _, child in ipairs(scrollingList:GetChildren()) do
         if child:IsA("TextButton") then
             local nome = child:GetAttribute("NomeJogador") or ""
+            local userId = child:GetAttribute("UserId") or 0
             local bate = (filtroAtivo == "") or (nome:lower():find(filtroAtivo:lower(), 1, true) ~= nil)
+
             child.Visible = bate
             if bate then
-                count = count + 1
-                child.LayoutOrder = count
+                table.insert(btns, {
+                    btn = child,
+                    isFav = favoritos[userId] == true,
+                    nome = nome,
+                })
             end
         end
     end
-    return count
+
+    table.sort(btns, function(a, b)
+        if a.isFav ~= b.isFav then
+            return a.isFav
+        end
+        return a.nome:lower() < b.nome:lower()
+    end)
+
+    for i, item in ipairs(btns) do
+        item.btn.LayoutOrder = i
+    end
+
+    return #btns
 end
 
 local function criarBotaoPlayer(p, layoutOrder)
@@ -1353,6 +1417,7 @@ local function criarBotaoPlayer(p, layoutOrder)
     pBtn.Visible = true
     pBtn.ZIndex = 3
     pBtn:SetAttribute("NomeJogador", p.Name)
+    pBtn:SetAttribute("UserId", p.UserId)
     pBtn.Parent = scrollingList
 
     local c = Instance.new("UICorner")
@@ -1385,10 +1450,31 @@ local function criarBotaoPlayer(p, layoutOrder)
     lbl.ZIndex = 4
     lbl.Parent = pBtn
 
+    local function atualizarVisual()
+        if favoritos[p.UserId] then
+            lbl.Text = "♾ " .. p.DisplayName
+            lbl.TextColor3 = COR_DOURADO
+            accent.BackgroundColor3 = COR_DOURADO
+            bStroke.Color = COR_DOURADO
+            bStroke.Transparency = 0.2
+            pBtn.BackgroundColor3 = Color3.fromRGB(25, 22, 10)
+        else
+            lbl.Text = "▸ " .. p.DisplayName
+            lbl.TextColor3 = COR_TEXTO
+            accent.BackgroundColor3 = COR_LINHA_D
+            bStroke.Color = COR_LINHA_D
+            bStroke.Transparency = 0.5
+            pBtn.BackgroundColor3 = COR_PANEL
+        end
+    end
+
+    atualizarVisual()
+    pBtn:SetAttribute("isFav", favoritos[p.UserId] == true)
+
     task.spawn(function()
         local isFriend = false
         pcall(function() isFriend = player:IsFriendsWith(p.UserId) end)
-        if isFriend and pBtn and pBtn.Parent then
+        if isFriend and pBtn and pBtn.Parent and not favoritos[p.UserId] then
             lbl.Text = "♥ " .. p.DisplayName
             lbl.TextColor3 = Color3.fromRGB(255, 120, 120)
             accent.BackgroundColor3 = COR_VERMELHO
@@ -1398,20 +1484,40 @@ local function criarBotaoPlayer(p, layoutOrder)
     end)
 
     pBtn.MouseEnter:Connect(function()
-        pBtn.BackgroundColor3 = Color3.fromRGB(20, 30, 24)
-        bStroke.Color = COR_LINHA
-        bStroke.Transparency = 0.2
-        accent.BackgroundColor3 = COR_GLOW
+        if not favoritos[p.UserId] then
+            pBtn.BackgroundColor3 = Color3.fromRGB(20, 30, 24)
+            bStroke.Color = COR_LINHA
+            bStroke.Transparency = 0.2
+            accent.BackgroundColor3 = COR_GLOW
+        end
     end)
 
     pBtn.MouseLeave:Connect(function()
-        pBtn.BackgroundColor3 = COR_PANEL
-        bStroke.Color = COR_LINHA_D
-        bStroke.Transparency = 0.5
-        accent.BackgroundColor3 = COR_LINHA_D
+        if not favoritos[p.UserId] then
+            pBtn.BackgroundColor3 = COR_PANEL
+            bStroke.Color = COR_LINHA_D
+            bStroke.Transparency = 0.5
+            accent.BackgroundColor3 = COR_LINHA_D
+        end
     end)
 
     pBtn.MouseButton1Click:Connect(function()
+        if modoFavorito then
+            if favoritos[p.UserId] then
+                favoritos[p.UserId] = nil
+            else
+                favoritos[p.UserId] = true
+            end
+
+            atualizarVisual()
+            pBtn:SetAttribute("isFav", favoritos[p.UserId] == true)
+
+            local count = atualizarVisibilidade()
+            scrollingList.CanvasSize = UDim2.new(0, 0, 0, count * 19)
+
+            return
+        end
+
         setRandomQuote()
         wipeAllPortals(true)
         panelOpen = false
@@ -1473,7 +1579,6 @@ local function criarBotaoPlayer(p, layoutOrder)
                 if not currentRoot then return end
 
                 if actualRoot then
-                    -- 🎯 Fica 10 studs na frente do alvo, olhando pra ele
                     local posAlvo = actualRoot.Position
                     local frenteAlvo = actualRoot.CFrame.LookVector
                     local posFinal = posAlvo + frenteAlvo * 10
@@ -1494,7 +1599,6 @@ local function criarBotaoPlayer(p, layoutOrder)
                     end
 
                     if actualRoot then
-                        -- 🎯 Fica 10 studs na frente do alvo, olhando pra ele
                         local posAlvo = actualRoot.Position
                         local frenteAlvo = actualRoot.CFrame.LookVector
                         local posFinal = posAlvo + frenteAlvo * 10
@@ -1563,13 +1667,34 @@ refreshBtn.MouseButton1Click:Connect(function()
         BackgroundColor3 = COR_PANEL
     }):Play()
 
-    panelTitle.Text = "▰ TARGETS (" .. count .. ")"
+    if not modoFavorito then
+        panelTitle.Text = "▰ TARGETS (" .. count .. ")"
+        task.delay(2, function()
+            if panelTitle and panelTitle.Parent and not modoFavorito then
+                panelTitle.Text = "▰ TARGETS"
+            end
+        end)
+    end
+end)
 
-    task.delay(2, function()
-        if panelTitle and panelTitle.Parent then
-            panelTitle.Text = "▰ TARGETS"
-        end
-    end)
+favBtn.MouseButton1Click:Connect(function()
+    modoFavorito = not modoFavorito
+
+    if modoFavorito then
+        favBtn.TextColor3 = COR_DOURADO
+        favBtn.BackgroundColor3 = Color3.fromRGB(30, 25, 10)
+        favStroke.Color = COR_DOURADO
+        favStroke.Transparency = 0.1
+        panelTitle.Text = "▰ TARGETS [SELECIONE]"
+        panelTitle.TextColor3 = COR_DOURADO
+    else
+        favBtn.TextColor3 = COR_TEXTO_D
+        favBtn.BackgroundColor3 = COR_PANEL
+        favStroke.Color = COR_LINHA_D
+        favStroke.Transparency = 0.3
+        panelTitle.Text = "▰ TARGETS"
+        panelTitle.TextColor3 = COR_LINHA
+    end
 end)
 
 --=============================================================
@@ -1828,4 +1953,4 @@ closeBtn.MouseButton1Click:Connect(function()
     fullCleanup()
 end)
 
-print("✅ Prime Rick Portal GUI v19 — TP virado pro alvo")
+print("✅ Prime Rick Portal GUI v20 — Sistema de Favoritos ♾")
