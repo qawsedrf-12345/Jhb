@@ -1,90 +1,22 @@
 --=============================================================
--- RICK PRIME v44 — Reescrita defensiva
--- Menu aparece PRIMEIRO, depois as features são conectadas
+-- RICK PRIME v42 — Portal GUI + Marcação + Anti-TP + Anti-Void
+-- Estilo Tech / HUD Sci-Fi — Sistema de Favoritos ♾
+-- v42: Refatoração completa, todas as dependências resolvidas
 --=============================================================
-
---=============================================================
--- ETAPA 1: PLAYER + GUI (cria e mostra IMEDIATAMENTE)
---=============================================================
+local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
-local player = Players.LocalPlayer
-
-if not player then
-    warn("[RickPrime] Player não encontrado!")
-    return
-end
-
-local playerGui = player:WaitForChild("PlayerGui", 10)
-if not playerGui then
-    warn("[RickPrime] PlayerGui não encontrado!")
-    return
-end
-
-print("[RickPrime] PlayerGui OK:", playerGui:GetFullName())
-
--- Cleanup de execução anterior (dentro do PlayerGui)
-for _, child in ipairs(playerGui:GetChildren()) do
-    if child.Name == "RickPrimeGUI_v44" or child.Name == "RickPrimeFX_v44" then
-        child:Destroy()
-    end
-end
-
--- ScreenGui principal — PRIMEIRO
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "RickPrimeGUI_v44"
-screenGui.ResetOnSpawn = false
-screenGui.IgnoreGuiInset = true
-screenGui.DisplayOrder = 999999
-screenGui.Enabled = true
-screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-screenGui.Parent = playerGui
-
-print("[RickPrime] ScreenGui criado:", screenGui:GetFullName())
-
--- ScreenGui de efeitos
-local fxGui = Instance.new("ScreenGui")
-fxGui.Name = "RickPrimeFX_v44"
-fxGui.ResetOnSpawn = false
-fxGui.IgnoreGuiInset = true
-fxGui.DisplayOrder = 999998
-fxGui.Enabled = true
-fxGui.Parent = playerGui
-
---=============================================================
--- ETAPA 2: MAIN FRAME (cria e mostra ANTES de qualquer lógica)
---=============================================================
-local mainFrame = Instance.new("Frame")
-mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 100, 0, 340)
-mainFrame.Position = UDim2.new(0, 20, 0.35, -170)
-mainFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-mainFrame.BackgroundTransparency = 0
-mainFrame.BorderSizePixel = 0
-mainFrame.Active = true
-mainFrame.Draggable = true
-mainFrame.Visible = true
-mainFrame.Parent = screenGui
-
-print("[RickPrime] MainFrame criado e visível")
-
---=============================================================
--- ETAPA 3: SERVICES E CONFIG (só depois do GUI estar visível)
---=============================================================
 local TweenService = game:GetService("TweenService")
 local CollectionService = game:GetService("CollectionService")
 local SoundService = game:GetService("SoundService")
 local Lighting = game:GetService("Lighting")
 local RunService = game:GetService("RunService")
 local TeleportService = game:GetService("TeleportService")
+local player = Players.LocalPlayer
 
--- Cleanup de execução anterior (global)
-if getgenv and getgenv().RickPortalCleanup then
-    pcall(getgenv().RickPortalCleanup)
-end
-if getgenv then
-    getgenv().AntiTP_Ativo = false
-    getgenv().Marcacao_Ativo = false
-end
+-- ✅ Cleanup de execução anterior
+if getgenv().RickPortalCleanup then pcall(getgenv().RickPortalCleanup) end
+getgenv().AntiTP_Ativo = false
+getgenv().Marcacao_Ativo = false
 
 for _, fx in ipairs(Lighting:GetChildren()) do
     if fx:IsA("BlurEffect") and fx.Name == "RP_Blur" then
@@ -115,7 +47,6 @@ local AV = {
     RaioInicial    = 5,
     RaioIncremento = 5,
     RaioMaximo     = 3000,
-    RaioMaximoBusca = 200,
     PassosPorAnel  = 20,
     AlturaAcima    = 150,
     AlturaAbaixo   = 500,
@@ -125,28 +56,10 @@ local AV = {
     JanelaMortes    = 30,
 }
 
-local RANDOM_CFG = {
-    MAX_TENTATIVAS   = 50,
-    DIST_MIN         = 300,
-    DIST_MAX         = 5000,
-    ALTURA_CEU       = 2000,
-    ALTURA_ABAIXO    = 3000,
-    DOT_MINIMO       = 0.7,
-    PONTO_BOM        = 0.8,
-    TIMEOUT          = 3,
-    OFFSET_Y         = 5,
-    PORTAL_FECHAR    = 15,
-    VOID_Y_MIN       = -600,
-    VOID_Y_MAX       = -400,
-    CEU_Y_MIN        = 4900,
-    CEU_Y_MAX        = 5100,
-}
-
 local TAG_GEN   = "RP_Gen_"   .. player.UserId
 local TAG_M1    = "RP_M1_"    .. player.UserId
 local TAG_M2    = "RP_M2_"    .. player.UserId
 local TAG_VOID  = "RP_Void_"  .. player.UserId
-local TAG_CEU   = "RP_Ceu_"   .. player.UserId
 local TAG_RET   = "RP_Ret_"   .. player.UserId
 local TAG_SAIDA = "RP_Saida_" .. player.UserId
 
@@ -183,8 +96,15 @@ local ATP = {
 local atpUltPos, atpUltimoCheck, atpCooldown, atpUltimoRespawn = nil, 0, false, 0
 
 --=============================================================
--- FX FRAMES (no fxGui)
+-- FX GUI
 --=============================================================
+local fxGui = Instance.new("ScreenGui")
+fxGui.Name = "RickPortalEffects"
+fxGui.ResetOnSpawn = false
+fxGui.IgnoreGuiInset = true
+fxGui.DisplayOrder = 999
+fxGui.Parent = player:WaitForChild("PlayerGui")
+
 local function mkFrame(name, color, z)
     local f = Instance.new("Frame")
     f.Name = name
@@ -267,9 +187,6 @@ local function alertaVermelho()
     ):Play()
 end
 
-local MAX_PARTICULAS = 30
-local particulasAtivas = 0
-
 local function efeitoOndas(quantidade, duracao, cor)
     task.spawn(function()
         for _ = 1, quantidade do
@@ -311,9 +228,6 @@ end
 local function efeitoParticulas(quantidade, cor)
     task.spawn(function()
         for _ = 1, quantidade do
-            if particulasAtivas >= MAX_PARTICULAS then break end
-            particulasAtivas = particulasAtivas + 1
-
             task.spawn(function()
                 local part = Instance.new("Frame")
                 part.Size = UDim2.new(0, math.random(3, 8), 0, math.random(3, 8))
@@ -339,7 +253,6 @@ local function efeitoParticulas(quantidade, cor)
                 tw:Play()
                 tw.Completed:Wait()
                 if part and part.Parent then part:Destroy() end
-                particulasAtivas = math.max(0, particulasAtivas - 1)
             end)
         end
     end)
@@ -403,16 +316,14 @@ end
 -- EFEITO TP
 --=============================================================
 local COR_TP = Color3.fromRGB(50, 255, 130)
-local efeitoTPRefs = 0
+local efeitoTPAtivo = false
 
 local function efeitoTP()
-    efeitoTPRefs = efeitoTPRefs + 1
-    if efeitoTPRefs > 1 then
+    if efeitoTPAtivo then
         flashTela(COR_TP, 0.12)
-        efeitoTPRefs = efeitoTPRefs - 1
         return
     end
-
+    efeitoTPAtivo = true
     task.spawn(function()
         fadeFrame.BackgroundColor3 = COR_TP
         fadeFrame.BackgroundTransparency = 0.5
@@ -431,7 +342,7 @@ local function efeitoTP()
         removerBlur(0.4)
 
         task.wait(0.6)
-        efeitoTPRefs = 0
+        efeitoTPAtivo = false
     end)
 end
 
@@ -462,16 +373,20 @@ local function fecharPortal(portalPart)
 
     TweenService:Create(portalPart, TweenInfo.new(DUR, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {Size = Vector3.new(0, 0, 0.01)}):Play()
 
-    task.spawn(function()
-        local inicio = tick()
-        while portalPart and portalPart.Parent do
-            if (tick() - inicio) >= DUR then
-                if portalPart and portalPart.Parent then portalPart:Destroy() end
-                break
-            end
-            portalPart.CFrame = cframeInicial
-            RunService.Heartbeat:Wait()
+    local inicio = tick()
+    local conn
+    conn = RunService.Heartbeat:Connect(function()
+        if not portalPart or not portalPart.Parent then
+            if conn then conn:Disconnect() end
+            return
         end
+        local p = (tick() - inicio) / DUR
+        if p >= 1 then
+            conn:Disconnect()
+            if portalPart and portalPart.Parent then portalPart:Destroy() end
+            return
+        end
+        portalPart.CFrame = cframeInicial
     end)
 end
 
@@ -503,338 +418,21 @@ local function wipePortalsPorTag(tag, comEfeito)
     return #portais
 end
 
-local ultimoWipe = 0
-local WIPE_COOLDOWN = 0.3
-
 local function wipeAllPortals(comEfeito)
-    local agora = tick()
-    if agora - ultimoWipe < WIPE_COOLDOWN then
-        return 0
-    end
-    ultimoWipe = agora
-
     local total = wipePortalsPorTag(TAG_GEN, comEfeito)
     table.clear(activePortals)
     return total
 end
 
-for _, tag in ipairs({TAG_GEN, TAG_M1, TAG_M2, TAG_VOID, TAG_CEU, TAG_RET, TAG_SAIDA}) do
+for _, tag in ipairs({TAG_GEN, TAG_M1, TAG_M2, TAG_VOID, TAG_RET, TAG_SAIDA}) do
     for _, p in ipairs(CollectionService:GetTagged(tag)) do
         if p then p:Destroy() end
     end
 end
 
---=============================================================
--- UI — resto do frame principal
---=============================================================
-local mainCorner = Instance.new("UICorner")
-mainCorner.CornerRadius = UDim.new(0, 2)
-mainCorner.Parent = mainFrame
-
-local mainStroke = Instance.new("UIStroke")
-mainStroke.Color = COR_LINHA_D
-mainStroke.Thickness = 1
-mainStroke.Transparency = 0.2
-mainStroke.Parent = mainFrame
-
-local function fazerCanto(posX, posY, offX, offY)
-    local cantoH = Instance.new("Frame")
-    cantoH.Size = UDim2.new(0, 10, 0, 1)
-    cantoH.Position = UDim2.new(posX.Scale, posX.Offset + offX, posY.Scale, posY.Offset)
-    cantoH.BackgroundColor3 = COR_LINHA
-    cantoH.BorderSizePixel = 0
-    cantoH.ZIndex = 5
-    cantoH.Parent = mainFrame
-
-    local cantoV = Instance.new("Frame")
-    cantoV.Size = UDim2.new(0, 1, 0, 10)
-    cantoV.Position = UDim2.new(posX.Scale, posX.Offset, posY.Scale, posY.Offset + offY)
-    cantoV.BackgroundColor3 = COR_LINHA
-    cantoV.BorderSizePixel = 0
-    cantoV.ZIndex = 5
-    cantoV.Parent = mainFrame
+if CoreGui:FindFirstChild("RickPortalGUI") then
+    CoreGui.RickPortalGUI:Destroy()
 end
-
-fazerCanto(UDim.new(0, 0), UDim.new(0, 0), 0, 0)
-fazerCanto(UDim.new(1, 0), UDim.new(0, 0), -10, 0)
-fazerCanto(UDim.new(0, 0), UDim.new(1, 0), 0, -10)
-fazerCanto(UDim.new(1, 0), UDim.new(1, 0), -10, -10)
-
-local innerScreen = Instance.new("Frame")
-innerScreen.Size = UDim2.new(1, -8, 1, -8)
-innerScreen.Position = UDim2.new(0, 4, 0, 4)
-innerScreen.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-innerScreen.BorderSizePixel = 0
-innerScreen.ClipsDescendants = false
-innerScreen.Parent = mainFrame
-
-local innerCorner = Instance.new("UICorner")
-innerCorner.CornerRadius = UDim.new(0, 2)
-innerCorner.Parent = innerScreen
-
-local innerStroke = Instance.new("UIStroke")
-innerStroke.Color = COR_LINHA
-innerStroke.Thickness = 1
-innerStroke.Transparency = 0.4
-innerStroke.Parent = innerScreen
-
-local statusBar = Instance.new("Frame")
-statusBar.Size = UDim2.new(1, 0, 0, 2)
-statusBar.BackgroundColor3 = COR_LINHA
-statusBar.BorderSizePixel = 0
-statusBar.ZIndex = 3
-statusBar.Parent = innerScreen
-
-local divTop = Instance.new("Frame")
-divTop.Size = UDim2.new(1, -8, 0, 1)
-divTop.Position = UDim2.new(0, 4, 0, 38)
-divTop.BackgroundColor3 = COR_LINHA_D
-divTop.BorderSizePixel = 0
-divTop.ZIndex = 3
-divTop.Parent = innerScreen
-
-local titleTag = Instance.new("TextLabel")
-titleTag.Size = UDim2.new(1, -10, 0, 8)
-titleTag.Position = UDim2.new(0, 5, 0, 5)
-titleTag.BackgroundTransparency = 1
-titleTag.Text = "▰ PRIME OS // v44.0"
-titleTag.TextColor3 = COR_CIANO
-titleTag.Font = Enum.Font.Code
-titleTag.TextSize = 6
-titleTag.TextXAlignment = Enum.TextXAlignment.Left
-titleTag.ZIndex = 4
-titleTag.Parent = innerScreen
-
-local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, -10, 0, 12)
-title.Position = UDim2.new(0, 5, 0, 12)
-title.BackgroundTransparency = 1
-title.Text = "RICK PRIME"
-title.TextColor3 = COR_LINHA
-title.Font = Enum.Font.GothamBlack
-title.TextSize = 10
-title.TextXAlignment = Enum.TextXAlignment.Left
-title.ZIndex = 4
-title.Parent = innerScreen
-
-local liveDot = Instance.new("Frame")
-liveDot.Size = UDim2.new(0, 5, 0, 5)
-liveDot.Position = UDim2.new(1, -14, 0, 5)
-liveDot.BackgroundColor3 = COR_VERMELHO
-liveDot.BorderSizePixel = 0
-liveDot.ZIndex = 4
-liveDot.Parent = innerScreen
-
-local liveDotCorner = Instance.new("UICorner")
-liveDotCorner.CornerRadius = UDim.new(1, 0)
-liveDotCorner.Parent = liveDot
-
-local liveDotStroke = Instance.new("UIStroke")
-liveDotStroke.Color = Color3.fromRGB(255, 100, 100)
-liveDotStroke.Thickness = 1
-liveDotStroke.Transparency = 0.5
-liveDotStroke.Parent = liveDot
-
-task.spawn(function()
-    while liveDot and liveDot.Parent do
-        liveDot.BackgroundTransparency = 0
-        liveDotStroke.Transparency = 0.2
-        task.wait(0.6)
-        if not (liveDot and liveDot.Parent) then break end
-        liveDot.BackgroundTransparency = 0.7
-        liveDotStroke.Transparency = 0.8
-        task.wait(0.6)
-    end
-end)
-
-local quoteLabel = Instance.new("TextLabel")
-quoteLabel.Size = UDim2.new(0.9, 0, 0, 9)
-quoteLabel.Position = UDim2.new(0.05, 0, 0, 27)
-quoteLabel.BackgroundTransparency = 1
-quoteLabel.Text = "// WUBBA LUBBA DUB DUB_"
-quoteLabel.TextColor3 = COR_TEXTO_D
-quoteLabel.Font = Enum.Font.Code
-quoteLabel.TextSize = 5
-quoteLabel.TextXAlignment = Enum.TextXAlignment.Left
-quoteLabel.ZIndex = 4
-quoteLabel.Parent = innerScreen
-
-local rickQuotes = {
-    "// WUBBA LUBBA DUB DUB_",
-    "// I'M SCRIPT RICK_",
-    "// NOBODY EXISTS ON PURPOSE_",
-    "// TO LIVE IS TO RISK IT ALL_",
-    "// GRAB THE PORTAL GUN_",
-    "// EXISTENCE IS PAIN_",
-    "// SCIENCE IS ART_",
-    "// BOOM! DIMENSIONAL TRAVELERS_",
-}
-
-local function setRandomQuote()
-    quoteLabel.Text = rickQuotes[math.random(1, #rickQuotes)]
-end
-
---=============================================================
--- ESTADOS
---=============================================================
-local panelOpen = false
-local playerBtns = {}
-local filtroAtivo = ""
-local modoFavorito = false
-local favoritos = {}
-
-local permanenciaAtiva = false
-local marcacaoP1Perm = nil
-
-local panelTween = nil
-local refreshLock = false
-local refreshAgendado = false
-
---=============================================================
--- createButton
---=============================================================
-local function createButton(text, yPos, iconeCor, semHover)
-    iconeCor = iconeCor or COR_LINHA
-
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0.9, 0, 0, 16)
-    btn.Position = UDim2.new(0.05, 0, 0, yPos)
-    btn.BackgroundColor3 = COR_PANEL
-    btn.BackgroundTransparency = 0.15
-    btn.Text = ""
-    btn.AutoButtonColor = false
-    btn.BorderSizePixel = 0
-    btn.ZIndex = 4
-    btn.Parent = innerScreen
-
-    local bc = Instance.new("UICorner")
-    bc.CornerRadius = UDim.new(0, 2)
-    bc.Parent = btn
-
-    local bs = Instance.new("UIStroke")
-    bs.Color = COR_LINHA_D
-    bs.Thickness = 1
-    bs.Transparency = 0.5
-    bs.Parent = btn
-
-    local accent = Instance.new("Frame")
-    accent.Size = UDim2.new(0, 2, 1, -6)
-    accent.Position = UDim2.new(0, 0, 0, 3)
-    accent.BackgroundColor3 = iconeCor
-    accent.BorderSizePixel = 0
-    accent.ZIndex = 5
-    accent.Parent = btn
-
-    local lbl = Instance.new("TextLabel")
-    lbl.Size = UDim2.new(1, -12, 1, 0)
-    lbl.Position = UDim2.new(0, 10, 0, 0)
-    lbl.BackgroundTransparency = 1
-    lbl.Text = text
-    lbl.TextColor3 = COR_TEXTO
-    lbl.Font = Enum.Font.Code
-    lbl.TextSize = 6
-    lbl.TextXAlignment = Enum.TextXAlignment.Left
-    lbl.ZIndex = 5
-    lbl.Parent = btn
-
-    if not semHover then
-        btn.MouseEnter:Connect(function()
-            if not btn:GetAttribute("ActiveState") then
-                btn.BackgroundColor3 = Color3.fromRGB(20, 30, 24)
-                bs.Color = COR_LINHA
-                bs.Transparency = 0.2
-                accent.BackgroundColor3 = COR_GLOW
-            end
-        end)
-
-        btn.MouseLeave:Connect(function()
-            if not btn:GetAttribute("ActiveState") then
-                btn.BackgroundColor3 = COR_PANEL
-                bs.Color = COR_LINHA_D
-                bs.Transparency = 0.5
-                accent.BackgroundColor3 = iconeCor
-            end
-        end)
-    end
-
-    return btn
-end
-
---=============================================================
--- BOTÕES
---=============================================================
-local tpPlayerBtn  = createButton("▸ SELECT TARGET", 44, COR_LINHA)
-local clearBtn     = createButton("▸ CLEAR PORTALS", 62, COR_CIANO)
-local voidBtn      = createButton("▸ VOID DIMENSION", 80, COR_VERMELHO)
-local ceusBtn      = createButton("▸ CEUS", 98, COR_CIANO, true)
-local randomBtn    = createButton("▸ RANDOM", 116, COR_DOURADO)
-local marcacaoBtn  = createButton("▸ MARCACAO [0/2]", 134, Color3.fromRGB(255, 180, 40))
-local permBtn      = createButton("▸ POSICAO PERM [OFF]", 152, COR_DOURADO)
-local antiTPBtn    = createButton("▸ ANTI-TP [OFF]", 170, COR_VERMELHO)
-local antiVoidBtn  = createButton("▸ ANTI-VOID [OFF]", 188, COR_CIANO)
-local minimizarBtn = createButton("▾ MINIMIZAR", 210, COR_CIANO)
-local rejoinBtn    = createButton("↻ REJOIN", 228, COR_DOURADO)
-local closeBtn     = createButton("✕ CLOSE SESSION", 252, COR_VERMELHO)
-
-print("[RickPrime] Botões criados:", 12)
-
-local closeStroke    = closeBtn:FindFirstChildOfClass("UIStroke")
-local voidStroke     = voidBtn:FindFirstChildOfClass("UIStroke")
-local marcacaoStroke = marcacaoBtn:FindFirstChildOfClass("UIStroke")
-local antiTPStroke   = antiTPBtn:FindFirstChildOfClass("UIStroke")
-local permStroke     = permBtn:FindFirstChildOfClass("UIStroke")
-local antiVoidStroke = antiVoidBtn:FindFirstChildOfClass("UIStroke")
-local minimizarStroke = minimizarBtn:FindFirstChildOfClass("UIStroke")
-local rejoinStroke    = rejoinBtn:FindFirstChildOfClass("UIStroke")
-local ceusStroke      = ceusBtn:FindFirstChildOfClass("UIStroke")
-local randomStroke    = randomBtn:FindFirstChildOfClass("UIStroke")
-
-if voidStroke then voidStroke.Color = COR_VERMELHO voidStroke.Transparency = 0.3 end
-if marcacaoStroke then marcacaoStroke.Color = Color3.fromRGB(180, 130, 0) marcacaoStroke.Transparency = 0.4 end
-if antiTPStroke then antiTPStroke.Color = COR_VERMELHO antiTPStroke.Transparency = 0.4 end
-if closeStroke then closeStroke.Color = COR_VERMELHO closeStroke.Transparency = 0.2 end
-if permStroke then permStroke.Color = COR_DOURADO_D permStroke.Transparency = 0.4 end
-if antiVoidStroke then antiVoidStroke.Color = COR_CIANO antiVoidStroke.Transparency = 0.4 end
-if minimizarStroke then minimizarStroke.Color = COR_CIANO minimizarStroke.Transparency = 0.4 end
-if rejoinStroke then rejoinStroke.Color = COR_DOURADO_D rejoinStroke.Transparency = 0.4 end
-if randomStroke then randomStroke.Color = COR_DOURADO_D randomStroke.Transparency = 0.3 end
-
-ceusBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-ceusBtn.BackgroundTransparency = 0
-
-local ceusLbl = ceusBtn:FindFirstChildOfClass("TextLabel")
-if ceusLbl then ceusLbl.TextColor3 = COR_CIANO end
-
-if ceusStroke then
-    ceusStroke.Color = COR_CIANO
-    ceusStroke.Transparency = 0.2
-end
-
-local ceusAccent = ceusBtn:FindFirstChild("Frame")
-if ceusAccent and ceusAccent:IsA("Frame") then
-    ceusAccent.BackgroundColor3 = COR_CIANO
-end
-
-ceusBtn.MouseEnter:Connect(function()
-    ceusBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-end)
-
-ceusBtn.MouseLeave:Connect(function()
-    ceusBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-end)
-
-local footerLabel = Instance.new("TextLabel")
-footerLabel.Size = UDim2.new(1, -8, 0, 8)
-footerLabel.Position = UDim2.new(0, 4, 1, -10)
-footerLabel.BackgroundTransparency = 1
-footerLabel.Text = "PRIME RICK — C-137"
-footerLabel.TextColor3 = COR_TEXTO_D
-footerLabel.Font = Enum.Font.Code
-footerLabel.TextSize = 5
-footerLabel.ZIndex = 4
-footerLabel.Parent = innerScreen
-
-print("[RickPrime] UI construída com sucesso")
 
 --=============================================================
 -- VOID / CÉUS setup
@@ -1060,6 +658,325 @@ local function monitorarSaidaDoCeu()
 end
 
 --=============================================================
+-- UI — FRAME PRINCIPAL
+--=============================================================
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "RickPortalGUI"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = CoreGui
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 100, 0, 320)
+mainFrame.Position = UDim2.new(0, 20, 0.35, -160)
+mainFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = screenGui
+
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 2)
+mainCorner.Parent = mainFrame
+
+local mainStroke = Instance.new("UIStroke")
+mainStroke.Color = COR_LINHA_D
+mainStroke.Thickness = 1
+mainStroke.Transparency = 0.2
+mainStroke.Parent = mainFrame
+
+local function fazerCanto(posX, posY, offX, offY)
+    local cantoH = Instance.new("Frame")
+    cantoH.Size = UDim2.new(0, 10, 0, 1)
+    cantoH.Position = UDim2.new(posX.Scale, posX.Offset + offX, posY.Scale, posY.Offset)
+    cantoH.BackgroundColor3 = COR_LINHA
+    cantoH.BorderSizePixel = 0
+    cantoH.ZIndex = 5
+    cantoH.Parent = mainFrame
+
+    local cantoV = Instance.new("Frame")
+    cantoV.Size = UDim2.new(0, 1, 0, 10)
+    cantoV.Position = UDim2.new(posX.Scale, posX.Offset, posY.Scale, posY.Offset + offY)
+    cantoV.BackgroundColor3 = COR_LINHA
+    cantoV.BorderSizePixel = 0
+    cantoV.ZIndex = 5
+    cantoV.Parent = mainFrame
+end
+
+fazerCanto(UDim.new(0, 0), UDim.new(0, 0), 0, 0)
+fazerCanto(UDim.new(1, 0), UDim.new(0, 0), -10, 0)
+fazerCanto(UDim.new(0, 0), UDim.new(1, 0), 0, -10)
+fazerCanto(UDim.new(1, 0), UDim.new(1, 0), -10, -10)
+
+local innerScreen = Instance.new("Frame")
+innerScreen.Size = UDim2.new(1, -8, 1, -8)
+innerScreen.Position = UDim2.new(0, 4, 0, 4)
+innerScreen.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+innerScreen.BorderSizePixel = 0
+innerScreen.ClipsDescendants = false
+innerScreen.Parent = mainFrame
+
+local innerCorner = Instance.new("UICorner")
+innerCorner.CornerRadius = UDim.new(0, 2)
+innerCorner.Parent = innerScreen
+
+local innerStroke = Instance.new("UIStroke")
+innerStroke.Color = COR_LINHA
+innerStroke.Thickness = 1
+innerStroke.Transparency = 0.4
+innerStroke.Parent = innerScreen
+
+local statusBar = Instance.new("Frame")
+statusBar.Size = UDim2.new(1, 0, 0, 2)
+statusBar.BackgroundColor3 = COR_LINHA
+statusBar.BorderSizePixel = 0
+statusBar.ZIndex = 3
+statusBar.Parent = innerScreen
+
+local divTop = Instance.new("Frame")
+divTop.Size = UDim2.new(1, -8, 0, 1)
+divTop.Position = UDim2.new(0, 4, 0, 38)
+divTop.BackgroundColor3 = COR_LINHA_D
+divTop.BorderSizePixel = 0
+divTop.ZIndex = 3
+divTop.Parent = innerScreen
+
+local titleTag = Instance.new("TextLabel")
+titleTag.Size = UDim2.new(1, -10, 0, 8)
+titleTag.Position = UDim2.new(0, 5, 0, 5)
+titleTag.BackgroundTransparency = 1
+titleTag.Text = "▰ PRIME OS // v42.0"
+titleTag.TextColor3 = COR_CIANO
+titleTag.Font = Enum.Font.Code
+titleTag.TextSize = 6
+titleTag.TextXAlignment = Enum.TextXAlignment.Left
+titleTag.ZIndex = 4
+titleTag.Parent = innerScreen
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -10, 0, 12)
+title.Position = UDim2.new(0, 5, 0, 12)
+title.BackgroundTransparency = 1
+title.Text = "RICK PRIME"
+title.TextColor3 = COR_LINHA
+title.Font = Enum.Font.GothamBlack
+title.TextSize = 10
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.ZIndex = 4
+title.Parent = innerScreen
+
+local liveDot = Instance.new("Frame")
+liveDot.Size = UDim2.new(0, 5, 0, 5)
+liveDot.Position = UDim2.new(1, -14, 0, 5)
+liveDot.BackgroundColor3 = COR_VERMELHO
+liveDot.BorderSizePixel = 0
+liveDot.ZIndex = 4
+liveDot.Parent = innerScreen
+
+local liveDotCorner = Instance.new("UICorner")
+liveDotCorner.CornerRadius = UDim.new(1, 0)
+liveDotCorner.Parent = liveDot
+
+local liveDotStroke = Instance.new("UIStroke")
+liveDotStroke.Color = Color3.fromRGB(255, 100, 100)
+liveDotStroke.Thickness = 1
+liveDotStroke.Transparency = 0.5
+liveDotStroke.Parent = liveDot
+
+task.spawn(function()
+    while liveDot and liveDot.Parent do
+        liveDot.BackgroundTransparency = 0
+        liveDotStroke.Transparency = 0.2
+        task.wait(0.6)
+        if not (liveDot and liveDot.Parent) then break end
+        liveDot.BackgroundTransparency = 0.7
+        liveDotStroke.Transparency = 0.8
+        task.wait(0.6)
+    end
+end)
+
+local quoteLabel = Instance.new("TextLabel")
+quoteLabel.Size = UDim2.new(0.9, 0, 0, 9)
+quoteLabel.Position = UDim2.new(0.05, 0, 0, 27)
+quoteLabel.BackgroundTransparency = 1
+quoteLabel.Text = "// WUBBA LUBBA DUB DUB_"
+quoteLabel.TextColor3 = COR_TEXTO_D
+quoteLabel.Font = Enum.Font.Code
+quoteLabel.TextSize = 5
+quoteLabel.TextXAlignment = Enum.TextXAlignment.Left
+quoteLabel.ZIndex = 4
+quoteLabel.Parent = innerScreen
+
+local rickQuotes = {
+    "// WUBBA LUBBA DUB DUB_",
+    "// I'M SCRIPT RICK_",
+    "// NOBODY EXISTS ON PURPOSE_",
+    "// TO LIVE IS TO RISK IT ALL_",
+    "// GRAB THE PORTAL GUN_",
+    "// EXISTENCE IS PAIN_",
+    "// SCIENCE IS ART_",
+    "// BOOM! DIMENSIONAL TRAVELERS_",
+}
+
+local function setRandomQuote()
+    quoteLabel.Text = rickQuotes[math.random(1, #rickQuotes)]
+end
+
+--=============================================================
+-- ✅ TODOS OS ESTADOS DECLARADOS AQUI (antes de qualquer handler)
+--=============================================================
+local panelOpen = false
+local playerBtns = {}
+local filtroAtivo = ""
+local modoFavorito = false
+local favoritos = {}
+
+local permanenciaAtiva = false
+local marcacaoP1Perm = nil
+
+local panelTween = nil
+local refreshLock = false
+local refreshAgendado = false
+
+--=============================================================
+-- createButton
+--=============================================================
+local function createButton(text, yPos, iconeCor, semHover)
+    iconeCor = iconeCor or COR_LINHA
+
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0.9, 0, 0, 16)
+    btn.Position = UDim2.new(0.05, 0, 0, yPos)
+    btn.BackgroundColor3 = COR_PANEL
+    btn.BackgroundTransparency = 0.15
+    btn.Text = ""
+    btn.AutoButtonColor = false
+    btn.BorderSizePixel = 0
+    btn.ZIndex = 4
+    btn.Parent = innerScreen
+
+    local bc = Instance.new("UICorner")
+    bc.CornerRadius = UDim.new(0, 2)
+    bc.Parent = btn
+
+    local bs = Instance.new("UIStroke")
+    bs.Color = COR_LINHA_D
+    bs.Thickness = 1
+    bs.Transparency = 0.5
+    bs.Parent = btn
+
+    local accent = Instance.new("Frame")
+    accent.Size = UDim2.new(0, 2, 1, -6)
+    accent.Position = UDim2.new(0, 0, 0, 3)
+    accent.BackgroundColor3 = iconeCor
+    accent.BorderSizePixel = 0
+    accent.ZIndex = 5
+    accent.Parent = btn
+
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(1, -12, 1, 0)
+    lbl.Position = UDim2.new(0, 10, 0, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = text
+    lbl.TextColor3 = COR_TEXTO
+    lbl.Font = Enum.Font.Code
+    lbl.TextSize = 6
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.ZIndex = 5
+    lbl.Parent = btn
+
+    if not semHover then
+        btn.MouseEnter:Connect(function()
+            if not btn:GetAttribute("ActiveState") then
+                btn.BackgroundColor3 = Color3.fromRGB(20, 30, 24)
+                bs.Color = COR_LINHA
+                bs.Transparency = 0.2
+                accent.BackgroundColor3 = COR_GLOW
+            end
+        end)
+
+        btn.MouseLeave:Connect(function()
+            if not btn:GetAttribute("ActiveState") then
+                btn.BackgroundColor3 = COR_PANEL
+                bs.Color = COR_LINHA_D
+                bs.Transparency = 0.5
+                accent.BackgroundColor3 = iconeCor
+            end
+        end)
+    end
+
+    return btn
+end
+
+--=============================================================
+-- BOTÕES PRINCIPAIS
+--=============================================================
+local tpPlayerBtn  = createButton("▸ SELECT TARGET", 44, COR_LINHA)
+local clearBtn     = createButton("▸ CLEAR PORTALS", 62, COR_CIANO)
+local voidBtn      = createButton("▸ VOID DIMENSION", 80, COR_VERMELHO)
+local ceusBtn      = createButton("▸ CEUS", 98, COR_CIANO, true)
+local marcacaoBtn  = createButton("▸ MARCACAO [0/2]", 116, Color3.fromRGB(255, 180, 40))
+local permBtn      = createButton("▸ POSICAO PERM [OFF]", 134, COR_DOURADO)
+local antiTPBtn    = createButton("▸ ANTI-TP [OFF]", 152, COR_VERMELHO)
+local antiVoidBtn  = createButton("▸ ANTI-VOID [OFF]", 170, COR_CIANO)
+local minimizarBtn = createButton("▾ MINIMIZAR", 192, COR_CIANO)
+local rejoinBtn    = createButton("↻ REJOIN", 210, COR_DOURADO)
+local closeBtn     = createButton("✕ CLOSE SESSION", 234, COR_VERMELHO)
+
+local closeStroke    = closeBtn:FindFirstChildOfClass("UIStroke")
+local voidStroke     = voidBtn:FindFirstChildOfClass("UIStroke")
+local marcacaoStroke = marcacaoBtn:FindFirstChildOfClass("UIStroke")
+local antiTPStroke   = antiTPBtn:FindFirstChildOfClass("UIStroke")
+local permStroke     = permBtn:FindFirstChildOfClass("UIStroke")
+local antiVoidStroke = antiVoidBtn:FindFirstChildOfClass("UIStroke")
+local minimizarStroke = minimizarBtn:FindFirstChildOfClass("UIStroke")
+local rejoinStroke    = rejoinBtn:FindFirstChildOfClass("UIStroke")
+local ceusStroke      = ceusBtn:FindFirstChildOfClass("UIStroke")
+
+if voidStroke then voidStroke.Color = COR_VERMELHO voidStroke.Transparency = 0.3 end
+if marcacaoStroke then marcacaoStroke.Color = Color3.fromRGB(180, 130, 0) marcacaoStroke.Transparency = 0.4 end
+if antiTPStroke then antiTPStroke.Color = COR_VERMELHO antiTPStroke.Transparency = 0.4 end
+if closeStroke then closeStroke.Color = COR_VERMELHO closeStroke.Transparency = 0.2 end
+if permStroke then permStroke.Color = COR_DOURADO_D permStroke.Transparency = 0.4 end
+if antiVoidStroke then antiVoidStroke.Color = COR_CIANO antiVoidStroke.Transparency = 0.4 end
+if minimizarStroke then minimizarStroke.Color = COR_CIANO minimizarStroke.Transparency = 0.4 end
+if rejoinStroke then rejoinStroke.Color = COR_DOURADO_D rejoinStroke.Transparency = 0.4 end
+
+ceusBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+ceusBtn.BackgroundTransparency = 0
+
+local ceusLbl = ceusBtn:FindFirstChildOfClass("TextLabel")
+if ceusLbl then ceusLbl.TextColor3 = COR_CIANO end
+
+if ceusStroke then
+    ceusStroke.Color = COR_CIANO
+    ceusStroke.Transparency = 0.2
+end
+
+local ceusAccent = ceusBtn:FindFirstChild("Frame")
+if ceusAccent and ceusAccent:IsA("Frame") then
+    ceusAccent.BackgroundColor3 = COR_CIANO
+end
+
+ceusBtn.MouseEnter:Connect(function()
+    ceusBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+end)
+
+ceusBtn.MouseLeave:Connect(function()
+    ceusBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+end)
+
+local footerLabel = Instance.new("TextLabel")
+footerLabel.Size = UDim2.new(1, -8, 0, 8)
+footerLabel.Position = UDim2.new(0, 4, 1, -10)
+footerLabel.BackgroundTransparency = 1
+footerLabel.Text = "PRIME RICK — C-137"
+footerLabel.TextColor3 = COR_TEXTO_D
+footerLabel.Font = Enum.Font.Code
+footerLabel.TextSize = 5
+footerLabel.ZIndex = 4
+footerLabel.Parent = innerScreen
+
+--=============================================================
 -- PLAYER PANEL
 --=============================================================
 local slidingPanel = Instance.new("Frame")
@@ -1104,6 +1021,7 @@ panelTitle.Position = UDim2.new(0, 4, 0, 0)
 panelTitle.ZIndex = 4
 panelTitle.Parent = panelInner
 
+-- ♾ FAVORITOS
 local favBtn = Instance.new("TextButton")
 favBtn.Size = UDim2.new(0, 20, 0, 13)
 favBtn.Position = UDim2.new(1, -46, 0, 0)
@@ -1127,6 +1045,7 @@ favStroke.Thickness = 1
 favStroke.Transparency = 0.3
 favStroke.Parent = favBtn
 
+-- ⟳ REFRESH
 local refreshBtn = Instance.new("TextButton")
 refreshBtn.Size = UDim2.new(0, 20, 0, 13)
 refreshBtn.Position = UDim2.new(1, -24, 0, 0)
@@ -1150,6 +1069,7 @@ refreshStroke.Thickness = 1
 refreshStroke.Transparency = 0.3
 refreshStroke.Parent = refreshBtn
 
+-- SEARCH BOX
 local searchBox = Instance.new("TextBox")
 searchBox.Size = UDim2.new(1, -8, 0, 15)
 searchBox.Position = UDim2.new(0, 4, 0, 13)
@@ -1287,6 +1207,9 @@ local function createPortalInstance(cframe, tag, opcoes)
     return portalPart, fFront, bFront
 end
 
+--=============================================================
+-- PORTAL DE SAÍDA
+--=============================================================
 local function spawnPortalSaida(char)
     if not char or not char.Parent then return end
     local root = char:FindFirstChild("HumanoidRootPart")
@@ -1315,7 +1238,7 @@ local function spawnPortalSaida(char)
 end
 
 --=============================================================
--- HELPERS DE PAINEL
+-- HELPERS DE PAINEL (usam panelTween — já declarado)
 --=============================================================
 local function fecharPainel()
     if panelTween then panelTween:Cancel() end
@@ -1377,7 +1300,7 @@ local function atualizarLabelMarcacao()
             end
             marcacaoBtn:SetAttribute("ActiveState", 1)
         end
-        if getgenv then getgenv().Marcacao_Ativo = true end
+        getgenv().Marcacao_Ativo = true
     else
         local temP1 = marcacaoP1 and marcacaoP1.Parent
         local temP2 = marcacaoP2 and marcacaoP2.Parent
@@ -1393,7 +1316,7 @@ local function atualizarLabelMarcacao()
                 marcacaoStroke.Transparency = 0.1
             end
             marcacaoBtn:SetAttribute("ActiveState", 2)
-            if getgenv then getgenv().Marcacao_Ativo = true end
+            getgenv().Marcacao_Ativo = true
         elseif temP1 then
             if lbl then
                 lbl.Text = "▸ MARCACAO [1/2]"
@@ -1405,7 +1328,7 @@ local function atualizarLabelMarcacao()
                 marcacaoStroke.Transparency = 0.1
             end
             marcacaoBtn:SetAttribute("ActiveState", 1)
-            if getgenv then getgenv().Marcacao_Ativo = true end
+            getgenv().Marcacao_Ativo = true
         else
             if lbl then
                 lbl.Text = "▸ MARCACAO [0/2]"
@@ -1417,7 +1340,7 @@ local function atualizarLabelMarcacao()
                 marcacaoStroke.Transparency = 0.4
             end
             marcacaoBtn:SetAttribute("ActiveState", 0)
-            if getgenv then getgenv().Marcacao_Ativo = false end
+            getgenv().Marcacao_Ativo = false
         end
     end
 end
@@ -1799,6 +1722,7 @@ local function refreshPlayerList()
     refreshLock = true
 
     local ok, resultado = pcall(function()
+        -- 1. Limpa órfãos
         for _, child in ipairs(scrollingList:GetChildren()) do
             if child:IsA("TextButton") then
                 local uid = child:GetAttribute("UserId")
@@ -1808,12 +1732,14 @@ local function refreshPlayerList()
             end
         end
 
+        -- 2. Limpa refs mortas
         for userId, btn in pairs(playerBtns) do
             if not btn or not btn.Parent then
                 playerBtns[userId] = nil
             end
         end
 
+        -- 3. Remove quem saiu
         for userId, btn in pairs(playerBtns) do
             local jogador = Players:GetPlayerByUserId(userId)
             if not jogador or jogador == player then
@@ -1822,6 +1748,7 @@ local function refreshPlayerList()
             end
         end
 
+        -- 4. Pré-cache de amizades (evita yield no loop de criação)
         local amizades = {}
         for _, p in ipairs(Players:GetPlayers()) do
             if p ~= player then
@@ -1830,6 +1757,7 @@ local function refreshPlayerList()
             end
         end
 
+        -- 5. Cria os que faltam
         for _, p in ipairs(Players:GetPlayers()) do
             if p ~= player and not playerBtns[p.UserId] then
                 playerBtns[p.UserId] = criarBotaoPlayer(p, 0, amizades[p.UserId] or false)
@@ -1862,73 +1790,7 @@ local function contarPlayersVisiveis()
 end
 
 --=============================================================
--- RANDOM — busca
---=============================================================
-local function superficieEhSegura(res)
-    if not res or not res.Instance then return false end
-    if not res.Instance.CanCollide then return false end
-
-    local dot = res.Normal:Dot(Vector3.new(0, 1, 0))
-    if dot < RANDOM_CFG.DOT_MINIMO then return false end
-
-    local y = res.Position.Y
-    if y >= RANDOM_CFG.VOID_Y_MIN and y <= RANDOM_CFG.VOID_Y_MAX then
-        return false
-    end
-    if y >= RANDOM_CFG.CEU_Y_MIN and y <= RANDOM_CFG.CEU_Y_MAX then
-        return false
-    end
-
-    return true
-end
-
-local function buscarPontoAleatorio(character)
-    if not character then return nil end
-
-    local hrp = character:FindFirstChild("HumanoidRootPart")
-    if not hrp then return nil end
-
-    local origem = hrp.Position
-    local params = RaycastParams.new()
-    params.FilterType = Enum.RaycastFilterType.Exclude
-    params.FilterDescendantsInstances = { character }
-    params.IgnoreWater = true
-
-    local melhorPonto = nil
-    local melhorDist  = 0
-
-    for _ = 1, RANDOM_CFG.MAX_TENTATIVAS do
-        local angulo = math.random() * math.pi * 2
-        local dist = RANDOM_CFG.DIST_MIN
-            + math.random() * (RANDOM_CFG.DIST_MAX - RANDOM_CFG.DIST_MIN)
-
-        local x = origem.X + math.cos(angulo) * dist
-        local z = origem.Z + math.sin(angulo) * dist
-
-        local inicioRay = Vector3.new(x, origem.Y + RANDOM_CFG.ALTURA_CEU, z)
-        local direcao   = Vector3.new(0, -(RANDOM_CFG.ALTURA_CEU + RANDOM_CFG.ALTURA_ABAIXO), 0)
-
-        local res = workspace:Raycast(inicioRay, direcao, params)
-
-        if superficieEhSegura(res) then
-            local distReal = (res.Position - origem).Magnitude
-
-            if distReal > melhorDist then
-                melhorPonto = res.Position
-                melhorDist  = distReal
-            end
-
-            if distReal >= RANDOM_CFG.DIST_MAX * RANDOM_CFG.PONTO_BOM then
-                return res.Position
-            end
-        end
-    end
-
-    return melhorPonto
-end
-
---=============================================================
--- VOID
+-- VOID (abre)
 --=============================================================
 local function abrirPortalVoid()
     setRandomQuote()
@@ -2016,7 +1878,7 @@ local function abrirPortalVoid()
 end
 
 --=============================================================
--- CÉUS
+-- CÉUS (abre)
 --=============================================================
 local function abrirPortalCeu()
     setRandomQuote()
@@ -2029,7 +1891,7 @@ local function abrirPortalCeu()
 
     criarCeuLocalTP(root.Position)
 
-    local ceuPortal = createPortalInstance(root.CFrame * CFrame.new(0, 0, -5), TAG_CEU)
+    local ceuPortal = createPortalInstance(root.CFrame * CFrame.new(0, 0, -5), TAG_VOID)
     local lblCeu = ceusBtn:FindFirstChildOfClass("TextLabel")
     if lblCeu then
         lblCeu.Text = "▸ ENTRAR CEUS"
@@ -2098,7 +1960,7 @@ local function abrirPortalCeu()
                     task.wait(0.3)
                     deletarCeuPlace()
                     deletarCeuLocalTP()
-                    wipePortalsPorTag(TAG_CEU, true)
+                    wipePortalsPorTag(TAG_VOID, true)
                     wipePortalsPorTag(TAG_RET, true)
                 end)
             end)
@@ -2107,132 +1969,10 @@ local function abrirPortalCeu()
 end
 
 --=============================================================
--- RANDOM
---=============================================================
-local function abrirPortalRandom()
-    setRandomQuote()
-    wipeAllPortals(true)
-    fecharPainel()
-
-    local char = player.Character
-    local root = char and char:FindFirstChild("HumanoidRootPart")
-    if not root then return end
-
-    local lbl = randomBtn:FindFirstChildOfClass("TextLabel")
-    if lbl then
-        lbl.Text = "▸ SCANNING..."
-        lbl.TextColor3 = COR_DOURADO
-    end
-    randomBtn.BackgroundColor3 = Color3.fromRGB(30, 25, 10)
-    randomBtn:SetAttribute("ActiveState", true)
-    if randomStroke then
-        randomStroke.Color = COR_DOURADO
-        randomStroke.Transparency = 0.1
-    end
-
-    local pontoEncontrado = nil
-    local buscaConcluida = false
-
-    task.spawn(function()
-        local ok, res = pcall(buscarPontoAleatorio, char)
-        if ok then pontoEncontrado = res end
-        buscaConcluida = true
-    end)
-
-    local inicio = tick()
-    while not buscaConcluida and (tick() - inicio) < RANDOM_CFG.TIMEOUT do
-        task.wait(0.05)
-    end
-
-    if lbl then
-        lbl.Text = "▸ RANDOM"
-        lbl.TextColor3 = COR_TEXTO
-    end
-    randomBtn.BackgroundColor3 = COR_PANEL
-    randomBtn:SetAttribute("ActiveState", false)
-    if randomStroke then
-        randomStroke.Color = COR_DOURADO_D
-        randomStroke.Transparency = 0.3
-    end
-
-    if not pontoEncontrado then
-        if lbl then lbl.Text = "▸ NO GROUND!" end
-        task.wait(1.2)
-
-        local spawn = workspace:FindFirstChildOfClass("SpawnLocation")
-        if spawn then
-            pontoEncontrado = spawn.Position
-        else
-            if lbl then lbl.Text = "▸ FAILED" end
-            task.wait(1.2)
-            if lbl then lbl.Text = "▸ RANDOM" end
-            return
-        end
-    end
-
-    local charAtual = player.Character
-    local rootAtual = charAtual and charAtual:FindFirstChild("HumanoidRootPart")
-    if not rootAtual then return end
-
-    local portalEntrada = createPortalInstance(rootAtual.CFrame * CFrame.new(0, 0, -5), TAG_GEN)
-    if not portalEntrada then return end
-
-    if lbl then lbl.Text = "▸ ENTER PORTAL" end
-
-    local resetAtivo = true
-    task.delay(RANDOM_CFG.PORTAL_FECHAR, function()
-        if resetAtivo and portalEntrada and portalEntrada.Parent then
-            if lbl then lbl.Text = "▸ RANDOM" end
-            fecharPortal(portalEntrada)
-        end
-    end)
-
-    local touched = false
-    portalEntrada.Touched:Connect(function(hit)
-        if touched or hit.Parent ~= charAtual then return end
-        touched = true
-        resetAtivo = false
-        if lbl then lbl.Text = "▸ JUMPING..." end
-
-        playTPSound()
-        playRandomTPSound()
-        efeitoTP()
-
-        task.delay(0.1, function()
-            if portalEntrada and portalEntrada.Parent then
-                fecharPortal(portalEntrada)
-            end
-        end)
-
-        task.delay(0.2, function()
-            local cc = player.Character
-            local cr = cc and cc:FindFirstChild("HumanoidRootPart")
-            if not cr then
-                if lbl then lbl.Text = "▸ RANDOM" end
-                return
-            end
-
-            local rot = cr.CFrame - cr.CFrame.Position
-            local destinoFinal = pontoEncontrado + Vector3.new(0, RANDOM_CFG.OFFSET_Y, 0)
-            cr.CFrame = CFrame.new(destinoFinal) * rot
-            cr.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-            cr.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-
-            if lbl then lbl.Text = "▸ RANDOM" end
-
-            task.wait(0.05)
-            local cc2 = player.Character
-            if cc2 then spawnPortalSaida(cc2) end
-        end)
-    end)
-end
-
---=============================================================
--- HANDLERS
+-- HANDLERS DOS BOTÕES
 --=============================================================
 voidBtn.MouseButton1Click:Connect(abrirPortalVoid)
 ceusBtn.MouseButton1Click:Connect(abrirPortalCeu)
-randomBtn.MouseButton1Click:Connect(abrirPortalRandom)
 marcacaoBtn.MouseButton1Click:Connect(clicarMarcacao)
 
 tpPlayerBtn.MouseButton1Click:Connect(function()
@@ -2436,7 +2176,7 @@ antiTPBtn.MouseButton1Click:Connect(function()
     setRandomQuote()
     local ativo = not antiTPBtn:GetAttribute("ActiveState")
     antiTPBtn:SetAttribute("ActiveState", ativo)
-    if getgenv then getgenv().AntiTP_Ativo = ativo end
+    getgenv().AntiTP_Ativo = ativo
 
     local lbl = antiTPBtn:FindFirstChildOfClass("TextLabel")
 
@@ -2465,10 +2205,10 @@ antiTPBtn.MouseButton1Click:Connect(function()
 end)
 
 RunService.Heartbeat:Connect(function()
-    if not (getgenv and getgenv().AntiTP_Ativo) then return end
+    if not getgenv().AntiTP_Ativo then return end
 
-    if getgenv.AntiTP_IgnorarProximo then
-        getgenv.AntiTP_IgnorarProximo = false
+    if getgenv().AntiTP_IgnorarProximo then
+        getgenv().AntiTP_IgnorarProximo = false
         local c = player.Character
         local h = c and c:FindFirstChild("HumanoidRootPart")
         atpUltPos = h and h.Position or nil
@@ -2525,7 +2265,6 @@ RunService.Heartbeat:Connect(function()
 end)
 
 player.CharacterAdded:Connect(function()
-    if not (getgenv and getgenv().AntiTP_Ativo) then return end
     atpUltPos = nil
     atpUltimoCheck = 0
     atpUltimoRespawn = os.clock()
@@ -2614,9 +2353,6 @@ end
 local function avEfeitoParticulas(quantidade, cor)
     task.spawn(function()
         for _ = 1, quantidade do
-            if particulasAtivas >= MAX_PARTICULAS then break end
-            particulasAtivas = particulasAtivas + 1
-
             task.spawn(function()
                 local part = Instance.new("Frame")
                 part.Size = UDim2.new(0, math.random(3, 8), 0, math.random(3, 8))
@@ -2642,7 +2378,6 @@ local function avEfeitoParticulas(quantidade, cor)
                 tw:Play()
                 tw.Completed:Wait()
                 if part and part.Parent then part:Destroy() end
-                particulasAtivas = math.max(0, particulasAtivas - 1)
             end)
         end
     end)
@@ -2677,7 +2412,7 @@ local function avBuscarSuperficie(posicao, character)
     local candidatos = {}
     local raio = AV.RaioInicial
 
-    while raio <= AV.RaioMaximoBusca do
+    while raio <= AV.RaioMaximo do
         for i = 0, AV.PassosPorAnel - 1 do
             local angulo = (i / AV.PassosPorAnel) * math.pi * 2
             local x = posicao.X + math.cos(angulo) * raio
@@ -2722,7 +2457,7 @@ end
 local function avTeleportarParaSuperficie(character)
     if avTpCooldown then return end
     avTpCooldown = true
-    if getgenv then getgenv().AntiTP_IgnorarProximo = true end
+    getgenv().AntiTP_IgnorarProximo = true
 
     avTempoCaindo = 0
     avUltimoTempo = os.clock()
@@ -2751,10 +2486,6 @@ local function avTeleportarParaSuperficie(character)
     end)
 
     if not sucesso then warn("[AntiVoid] erro no TP:", erro) end
-
-    task.delay(0.2, function()
-        if getgenv then getgenv().AntiTP_IgnorarProximo = false end
-    end)
 
     local cooldown = avLocalSeguroAtivo and 0.3 or 1.5
     task.wait(cooldown)
@@ -2979,11 +2710,11 @@ end)
 -- MINIMIZAR
 --=============================================================
 local menuMinimizado = false
-local alturaOriginal = 340
+local alturaOriginal = 320
 local alturaMinimizada = 40
 
 local ocultarAoMinimizar = {
-    tpPlayerBtn, clearBtn, voidBtn, ceusBtn, randomBtn, marcacaoBtn,
+    tpPlayerBtn, clearBtn, voidBtn, ceusBtn, marcacaoBtn,
     permBtn, antiTPBtn, antiVoidBtn, rejoinBtn, closeBtn
 }
 
@@ -3050,7 +2781,7 @@ minimizarBtn.MouseButton1Click:Connect(function()
         TweenService:Create(statusBar, TweenInfo.new(0.25), {BackgroundTransparency = 0}):Play()
         TweenService:Create(innerStroke, TweenInfo.new(0.25), {Transparency = 0.4}):Play()
 
-        minimizarBtn.Position = UDim2.new(0.05, 0, 0, 210)
+        minimizarBtn.Position = UDim2.new(0.05, 0, 0, 192)
 
         TweenService:Create(mainFrame, TweenInfo.new(0.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
             Size = UDim2.new(0, 100, 0, alturaOriginal)
@@ -3090,8 +2821,6 @@ minimizarBtn.MouseButton1Click:Connect(function()
                 if btn == closeBtn then
                     strokeTransOriginal = 0.2
                 elseif btn == voidBtn then
-                    strokeTransOriginal = 0.3
-                elseif btn == randomBtn then
                     strokeTransOriginal = 0.3
                 elseif btn == antiTPBtn or btn == marcacaoBtn or btn == permBtn or btn == antiVoidBtn or btn == rejoinBtn then
                     strokeTransOriginal = 0.4
@@ -3151,19 +2880,16 @@ end)
 -- CLEANUP
 --=============================================================
 local function fullCleanup()
-    if getgenv then
-        getgenv().AntiTP_Ativo = false
-        getgenv().Marcacao_Ativo = false
-    end
+    getgenv().AntiTP_Ativo = false
+    getgenv().Marcacao_Ativo = false
     antiVoidAtivo = false
 
-    pcall(wipePortalsPorTag, TAG_GEN, true)
-    pcall(wipePortalsPorTag, TAG_M1, true)
-    pcall(wipePortalsPorTag, TAG_M2, true)
-    pcall(wipePortalsPorTag, TAG_VOID, true)
-    pcall(wipePortalsPorTag, TAG_CEU, true)
-    pcall(wipePortalsPorTag, TAG_RET, true)
-    pcall(wipePortalsPorTag, TAG_SAIDA, true)
+    wipePortalsPorTag(TAG_GEN, true)
+    wipePortalsPorTag(TAG_M1, true)
+    wipePortalsPorTag(TAG_M2, true)
+    wipePortalsPorTag(TAG_VOID, true)
+    wipePortalsPorTag(TAG_RET, true)
+    wipePortalsPorTag(TAG_SAIDA, true)
     table.clear(activePortals)
 
     deletarVoidPlace()
@@ -3189,10 +2915,10 @@ local function fullCleanup()
     if screenGui and screenGui.Parent then screenGui:Destroy() end
     if fxGui and fxGui.Parent then fxGui:Destroy() end
 
-    if getgenv then getgenv().RickPortalCleanup = nil end
+    getgenv().RickPortalCleanup = nil
 end
 
-if getgenv then getgenv().RickPortalCleanup = fullCleanup end
+getgenv().RickPortalCleanup = fullCleanup
 
 --=============================================================
 -- CLOSE
@@ -3206,10 +2932,8 @@ closeBtn.MouseButton1Click:Connect(function()
         closeLbl.TextColor3 = COR_VERMELHO
     end
 
-    if getgenv then
-        getgenv().AntiTP_Ativo = false
-        getgenv().Marcacao_Ativo = false
-    end
+    getgenv().AntiTP_Ativo = false
+    getgenv().Marcacao_Ativo = false
     antiVoidAtivo = false
 
     wipeAllPortals(true)
@@ -3229,7 +2953,7 @@ closeBtn.MouseButton1Click:Connect(function()
     local slideOutTween = TweenService:Create(
         mainFrame,
         TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.In),
-        {Position = UDim2.new(0, -150, 0.35, -170)}
+        {Position = UDim2.new(0, -150, 0.35, -160)}
     )
     slideOutTween:Play()
     slideOutTween.Completed:Wait()
@@ -3237,4 +2961,4 @@ closeBtn.MouseButton1Click:Connect(function()
     fullCleanup()
 end)
 
-print("[RickPrime] ✅ v44 PRONTO — Menu visível, botão RANDOM abaixo de CEUS")
+print("✅ Rick Prime v42 — Verificado e corrigido 🎯")
