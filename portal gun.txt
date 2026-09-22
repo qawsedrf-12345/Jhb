@@ -1,5 +1,6 @@
 --=============================================================
--- RICK PRIME — Portal GUI + Marcação + Anti-TP (v15)
+-- RICK PRIME — Portal GUI + Marcação + Anti-TP (v19)
+-- Estilo Tech / HUD Sci-Fi — TP virado pro alvo
 --=============================================================
 local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
@@ -42,7 +43,21 @@ local marcacaoP1, marcacaoP2 = nil, nil
 local marcacaoConns = {}
 
 --=============================================================
--- ANTI-TP (SIMPLIFICADO — só distância)
+-- PALETA TECH
+--=============================================================
+local COR_BG       = Color3.fromRGB(8, 10, 9)
+local COR_PANEL    = Color3.fromRGB(15, 18, 16)
+local COR_INNER    = Color3.fromRGB(5, 8, 6)
+local COR_LINHA    = Color3.fromRGB(0, 255, 100)
+local COR_LINHA_D  = Color3.fromRGB(0, 120, 50)
+local COR_CIANO    = Color3.fromRGB(0, 220, 200)
+local COR_VERMELHO = Color3.fromRGB(200, 30, 40)
+local COR_TEXTO    = Color3.fromRGB(160, 255, 180)
+local COR_TEXTO_D  = Color3.fromRGB(80, 140, 90)
+local COR_GLOW     = Color3.fromRGB(0, 255, 130)
+
+--=============================================================
+-- ANTI-TP
 --=============================================================
 local ATP = {
     DistanciaMax = 5,
@@ -300,7 +315,7 @@ local function fazerTPComEfeito(root, destinoCFrame)
 end
 
 --=============================================================
--- FECHAMENTO ANIMADO (encolhe reto, sem girar em volta do eixo)
+-- FECHAMENTO ANIMADO
 --=============================================================
 local function fecharPortal(portalPart)
     if not portalPart or not portalPart.Parent then return end
@@ -331,7 +346,6 @@ local function fecharPortal(portalPart)
         end
     end
 
-    -- 🌀 Animação: APENAS encolhe (mantém a rotação original)
     local DUR = 0.45
     local cframeInicial = portalPart.CFrame
 
@@ -341,7 +355,6 @@ local function fecharPortal(portalPart)
         { Size = Vector3.new(0, 0, 0.01) }
     ):Play()
 
-    -- 🔒 Mantém a rotação fixa enquanto encolhe
     local inicio = tick()
     local conn
     conn = RunService.Heartbeat:Connect(function()
@@ -414,7 +427,7 @@ if CoreGui:FindFirstChild("RickPortalGUI") then
 end
 
 --=============================================================
--- VOID (TAMANHO 1000 + GRAMA VERDE + TOLERÂNCIA 3s)
+-- VOID
 --=============================================================
 local VOID_Y = -500
 local VOID_CENTRO = Vector3.new(0, VOID_Y, 0)
@@ -453,7 +466,6 @@ local function criarVoidPlace()
     folder.Parent = workspace
     voidPlaceFolder = folder
 
-    -- 🌱 Chão com textura de grama e cor verde escura
     local chao = Instance.new("Part")
     chao.Name = "VoidChao"
     chao.Size = Vector3.new(VOID_TAMANHO * 2, 4, VOID_TAMANHO * 2)
@@ -464,7 +476,6 @@ local function criarVoidPlace()
     chao.Color = Color3.fromRGB(45, 90, 40)
     chao.Parent = folder
 
-    -- 🟢 Borda brilhante verde
     local borda = Instance.new("Part")
     borda.Name = "VoidBorda"
     borda.Size = Vector3.new(VOID_TAMANHO * 2 + 4, 1, VOID_TAMANHO * 2 + 4)
@@ -476,7 +487,6 @@ local function criarVoidPlace()
     borda.Transparency = 0.3
     borda.Parent = folder
 
-    -- 💡 Luz central
     local luzCentral = Instance.new("Part")
     luzCentral.Name = "VoidLuz"
     luzCentral.Size = Vector3.new(1, 1, 1)
@@ -564,244 +574,274 @@ screenGui.ResetOnSpawn = false
 screenGui.Parent = CoreGui
 
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 92, 0, 174)
-mainFrame.Position = UDim2.new(0, -130, 0.35, -87)
-mainFrame.BackgroundColor3 = Color3.fromRGB(35, 38, 42)
+mainFrame.Size = UDim2.new(0, 100, 0, 200)
+mainFrame.Position = UDim2.new(0, 20, 0.35, -100)
+mainFrame.BackgroundColor3 = COR_BG
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
 mainFrame.Draggable = true
 mainFrame.Parent = screenGui
 
-local uiCorner = Instance.new("UICorner")
-uiCorner.CornerRadius = UDim.new(0, 7)
-uiCorner.Parent = mainFrame
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 2)
+mainCorner.Parent = mainFrame
 
 local mainStroke = Instance.new("UIStroke")
-mainStroke.Color = Color3.fromRGB(40, 220, 90)
-mainStroke.Thickness = 1.5
+mainStroke.Color = COR_LINHA_D
+mainStroke.Thickness = 1
+mainStroke.Transparency = 0.2
 mainStroke.Parent = mainFrame
 
-local function addScrew(posX, posY)
-    local screw = Instance.new("Frame")
-    screw.Size = UDim2.new(0, 5, 0, 5)
-    screw.Position = UDim2.new(posX.Scale, posX.Offset, posY.Scale, posY.Offset)
-    screw.BackgroundColor3 = Color3.fromRGB(90, 95, 100)
-    screw.Parent = mainFrame
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(1, 0)
-    c.Parent = screw
-    local slot = Instance.new("Frame")
-    slot.Size = UDim2.new(0, 3, 0, 1)
-    slot.Position = UDim2.new(0.5, -1, 0.5, 0)
-    slot.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-    slot.BorderSizePixel = 0
-    slot.Rotation = math.random(0, 180)
-    slot.Parent = screw
+local function fazerCanto(posX, posY, offX, offY)
+    local cantoH = Instance.new("Frame")
+    cantoH.Size = UDim2.new(0, 10, 0, 1)
+    cantoH.Position = UDim2.new(posX.Scale, posX.Offset + offX, posY.Scale, posY.Offset)
+    cantoH.BackgroundColor3 = COR_LINHA
+    cantoH.BorderSizePixel = 0
+    cantoH.ZIndex = 5
+    cantoH.Parent = mainFrame
+
+    local cantoV = Instance.new("Frame")
+    cantoV.Size = UDim2.new(0, 1, 0, 10)
+    cantoV.Position = UDim2.new(posX.Scale, posX.Offset, posY.Scale, posY.Offset + offY)
+    cantoV.BackgroundColor3 = COR_LINHA
+    cantoV.BorderSizePixel = 0
+    cantoV.ZIndex = 5
+    cantoV.Parent = mainFrame
 end
 
-addScrew(UDim.new(0, 3), UDim.new(0, 3))
-addScrew(UDim.new(1, -8), UDim.new(0, 3))
-addScrew(UDim.new(0, 3), UDim.new(1, -8))
-addScrew(UDim.new(1, -8), UDim.new(1, -8))
+fazerCanto(UDim.new(0, 0), UDim.new(0, 0), 0, 0)
+fazerCanto(UDim.new(1, 0), UDim.new(0, 0), -10, 0)
+fazerCanto(UDim.new(0, 0), UDim.new(1, 0), 0, -10)
+fazerCanto(UDim.new(1, 0), UDim.new(1, 0), -10, -10)
 
 local innerScreen = Instance.new("Frame")
-innerScreen.Size = UDim2.new(1, -12, 1, -12)
-innerScreen.Position = UDim2.new(0, 6, 0, 6)
-innerScreen.BackgroundColor3 = Color3.fromRGB(12, 18, 14)
+innerScreen.Size = UDim2.new(1, -8, 1, -8)
+innerScreen.Position = UDim2.new(0, 4, 0, 4)
+innerScreen.BackgroundColor3 = COR_INNER
+innerScreen.BorderSizePixel = 0
 innerScreen.ClipsDescendants = false
 innerScreen.Parent = mainFrame
 
 local innerCorner = Instance.new("UICorner")
-innerCorner.CornerRadius = UDim.new(0, 5)
+innerCorner.CornerRadius = UDim.new(0, 2)
 innerCorner.Parent = innerScreen
 
-local function createSaggingCable(startX, startY, endX, endY, sagDepth, wireColor, customZIndex)
-    local z = customZIndex or 6
-    local segments = 6
-    for i = 0, segments - 1 do
-        local t1 = i / segments
-        local t2 = (i + 1) / segments
-        local function getPoint(t)
-            local x = startX + (endX - startX) * t
-            local y = startY + (endY - startY) * t + sagDepth * (4 * t * (1 - t))
-            return x, y
-        end
-        local x1, y1 = getPoint(t1)
-        local x2, y2 = getPoint(t2)
-        local dx = x2 - x1
-        local dy = y2 - y1
-        local dist = math.sqrt(dx * dx + dy * dy)
-        local angle = math.deg(math.atan(dy, dx))
+local innerStroke = Instance.new("UIStroke")
+innerStroke.Color = COR_LINHA
+innerStroke.Thickness = 1
+innerStroke.Transparency = 0.4
+innerStroke.Parent = innerScreen
 
-        local seg = Instance.new("Frame")
-        seg.Size = UDim2.new(0, dist + 1, 0, 2)
-        seg.Position = UDim2.new(0, x1, 0, y1)
-        seg.Rotation = angle
-        seg.BackgroundColor3 = wireColor
-        seg.BorderSizePixel = 0
-        seg.ZIndex = z
-        seg.Parent = mainFrame
+local statusBar = Instance.new("Frame")
+statusBar.Size = UDim2.new(1, 0, 0, 2)
+statusBar.Position = UDim2.new(0, 0, 0, 0)
+statusBar.BackgroundColor3 = COR_LINHA
+statusBar.BorderSizePixel = 0
+statusBar.ZIndex = 3
+statusBar.Parent = innerScreen
 
-        if i == math.floor(segments / 2) then
-            local spark = Instance.new("Frame")
-            spark.Size = UDim2.new(0, 3, 0, 3)
-            spark.Position = UDim2.new(0.5, -1.5, 0.5, -1.5)
-            spark.BackgroundColor3 = Color3.fromRGB(255, 140, 0)
-            spark.BorderSizePixel = 0
-            spark.ZIndex = z + 2
-            spark.Parent = seg
-            local sc = Instance.new("UICorner")
-            sc.CornerRadius = UDim.new(1, 0)
-            sc.Parent = spark
-            task.spawn(function()
-                while spark and spark.Parent do
-                    spark.Visible = math.random() > 0.3
-                    spark.BackgroundColor3 = math.random() > 0.5
-                        and Color3.fromRGB(255, 100, 0)
-                        or Color3.fromRGB(255, 220, 50)
-                    task.wait(math.random(10, 25) / 100)
-                end
-            end)
-        end
-    end
-end
+local divTop = Instance.new("Frame")
+divTop.Size = UDim2.new(1, -8, 0, 1)
+divTop.Position = UDim2.new(0, 4, 0, 38)
+divTop.BackgroundColor3 = COR_LINHA_D
+divTop.BorderSizePixel = 0
+divTop.ZIndex = 3
+divTop.Parent = innerScreen
 
-createSaggingCable(4, 0, 66, 3, 8, Color3.fromRGB(140, 35, 35), 5)
-createSaggingCable(3, 0, 44, 4, 10, Color3.fromRGB(220, 45, 45), 6)
+local titleTag = Instance.new("TextLabel")
+titleTag.Size = UDim2.new(1, -10, 0, 8)
+titleTag.Position = UDim2.new(0, 5, 0, 5)
+titleTag.BackgroundTransparency = 1
+titleTag.Text = "▰ PRIME OS // v19.0"
+titleTag.TextColor3 = COR_CIANO
+titleTag.Font = Enum.Font.Code
+titleTag.TextSize = 6
+titleTag.TextXAlignment = Enum.TextXAlignment.Left
+titleTag.ZIndex = 4
+titleTag.Parent = innerScreen
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -10, 0, 12)
+title.Position = UDim2.new(0, 5, 0, 12)
+title.BackgroundTransparency = 1
+title.Text = "RICK PRIME ⚡"
+title.TextColor3 = COR_LINHA
+title.Font = Enum.Font.GothamBlack
+title.TextSize = 10
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.ZIndex = 4
+title.Parent = innerScreen
+
+local liveDot = Instance.new("Frame")
+liveDot.Size = UDim2.new(0, 5, 0, 5)
+liveDot.Position = UDim2.new(1, -14, 0, 5)
+liveDot.BackgroundColor3 = COR_VERMELHO
+liveDot.BorderSizePixel = 0
+liveDot.ZIndex = 4
+liveDot.Parent = innerScreen
+
+local liveDotCorner = Instance.new("UICorner")
+liveDotCorner.CornerRadius = UDim.new(1, 0)
+liveDotCorner.Parent = liveDot
+
+local liveDotStroke = Instance.new("UIStroke")
+liveDotStroke.Color = Color3.fromRGB(255, 100, 100)
+liveDotStroke.Thickness = 1
+liveDotStroke.Transparency = 0.5
+liveDotStroke.Parent = liveDot
 
 task.spawn(function()
-    while innerScreen and innerScreen.Parent do
-        task.wait(math.random(3, 8))
-        mainStroke.Color = Color3.fromRGB(255, 255, 200)
-        task.wait(0.05)
-        mainStroke.Color = Color3.fromRGB(40, 220, 90)
-        task.wait(0.1)
-        mainStroke.Color = Color3.fromRGB(255, 140, 0)
-        task.wait(0.05)
-        mainStroke.Color = Color3.fromRGB(40, 220, 90)
+    while liveDot and liveDot.Parent do
+        liveDot.BackgroundTransparency = 0
+        liveDotStroke.Transparency = 0.2
+        task.wait(0.6)
+        if not (liveDot and liveDot.Parent) then break end
+        liveDot.BackgroundTransparency = 0.7
+        liveDotStroke.Transparency = 0.8
+        task.wait(0.6)
     end
 end)
 
-TweenService:Create(
-    mainFrame,
-    TweenInfo.new(1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
-    { Position = UDim2.new(0, 15, 0.35, -87) }
-):Play()
-
-local title = Instance.new("TextLabel")
-title.Size, title.Position = UDim2.new(1, 0, 0, 13), UDim2.new(0, 0, 0, 2)
-title.BackgroundTransparency, title.Text = 1, "⚡ Prime Rick ⚡"
-title.TextColor3, title.Font, title.TextSize = Color3.fromRGB(50, 255, 100), Enum.Font.GothamBlack, 8
-title.Parent = innerScreen
-
 local quoteLabel = Instance.new("TextLabel")
-quoteLabel.Size, quoteLabel.Position = UDim2.new(0.9, 0, 0, 13), UDim2.new(0.05, 0, 0, 16)
-quoteLabel.BackgroundTransparency, quoteLabel.Text = 1, "\"Wubba Lubba!\""
-quoteLabel.TextColor3, quoteLabel.Font, quoteLabel.TextSize = Color3.fromRGB(170, 255, 180), Enum.Font.SourceSansItalic, 6
-quoteLabel.TextWrapped = true
+quoteLabel.Size = UDim2.new(0.9, 0, 0, 9)
+quoteLabel.Position = UDim2.new(0.05, 0, 0, 27)
+quoteLabel.BackgroundTransparency = 1
+quoteLabel.Text = "// WUBBA LUBBA DUB DUB_"
+quoteLabel.TextColor3 = COR_TEXTO_D
+quoteLabel.Font = Enum.Font.Code
+quoteLabel.TextSize = 5
+quoteLabel.TextXAlignment = Enum.TextXAlignment.Left
+quoteLabel.ZIndex = 4
 quoteLabel.Parent = innerScreen
 
 local rickQuotes = {
-    "\"Wubba Lubba Dub Dub!\"",
-    "\"I'm Script Rick!\"",
-    "\"Nobody exists on purpose.\"",
-    "\"To live is to risk it all.\"",
-    "\"Grab the portal gun, Morty.\"",
-    "\"Weddings are funerals with cake.\"",
-    "\"Existence is pain, Jerry!\"",
-    "\"Aw, geez, are we in a script?\"",
-    "\"Science is art, Morty.\"",
-    "\"Boom! Dimensional travelers!\"",
+    "// WUBBA LUBBA DUB DUB_",
+    "// I'M SCRIPT RICK_",
+    "// NOBODY EXISTS ON PURPOSE_",
+    "// TO LIVE IS TO RISK IT ALL_",
+    "// GRAB THE PORTAL GUN_",
+    "// EXISTENCE IS PAIN_",
+    "// SCIENCE IS ART_",
+    "// BOOM! DIMENSIONAL TRAVELERS_",
 }
 
 local function setRandomQuote()
     quoteLabel.Text = rickQuotes[math.random(1, #rickQuotes)]
 end
 
-local function createButton(text, yPos)
+--=============================================================
+-- createButton
+--=============================================================
+local function createButton(text, yPos, iconeCor)
+    iconeCor = iconeCor or COR_LINHA
+
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0.9, 0, 0, 15)
+    btn.Size = UDim2.new(0.9, 0, 0, 16)
     btn.Position = UDim2.new(0.05, 0, 0, yPos)
-    btn.BackgroundColor3 = Color3.fromRGB(20, 35, 25)
-    btn.Text = text
-    btn.TextColor3 = Color3.fromRGB(180, 255, 190)
-    btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 6
+    btn.BackgroundColor3 = COR_PANEL
+    btn.BackgroundTransparency = 0.15
+    btn.Text = ""
+    btn.AutoButtonColor = false
+    btn.BorderSizePixel = 0
+    btn.ZIndex = 4
     btn.Parent = innerScreen
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, 3)
-    c.Parent = btn
-    local s = Instance.new("UIStroke")
-    s.Color = Color3.fromRGB(40, 160, 70)
-    s.Thickness = 1
-    s.Parent = btn
+
+    local bc = Instance.new("UICorner")
+    bc.CornerRadius = UDim.new(0, 2)
+    bc.Parent = btn
+
+    local bs = Instance.new("UIStroke")
+    bs.Color = COR_LINHA_D
+    bs.Thickness = 1
+    bs.Transparency = 0.5
+    bs.Parent = btn
+
+    local accent = Instance.new("Frame")
+    accent.Size = UDim2.new(0, 2, 1, -6)
+    accent.Position = UDim2.new(0, 0, 0, 3)
+    accent.BackgroundColor3 = iconeCor
+    accent.BorderSizePixel = 0
+    accent.ZIndex = 5
+    accent.Parent = btn
+
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(1, -12, 1, 0)
+    lbl.Position = UDim2.new(0, 10, 0, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = text
+    lbl.TextColor3 = COR_TEXTO
+    lbl.Font = Enum.Font.Code
+    lbl.TextSize = 6
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.ZIndex = 5
+    lbl.Parent = btn
+
     btn.MouseEnter:Connect(function()
-        btn.BackgroundColor3 = Color3.fromRGB(30, 55, 35)
-    end)
-    btn.MouseLeave:Connect(function()
         if not btn:GetAttribute("ActiveState") then
-            btn.BackgroundColor3 = Color3.fromRGB(20, 35, 25)
+            btn.BackgroundColor3 = Color3.fromRGB(20, 30, 24)
+            bs.Color = COR_LINHA
+            bs.Transparency = 0.2
+            accent.BackgroundColor3 = COR_GLOW
         end
     end)
+
+    btn.MouseLeave:Connect(function()
+        if not btn:GetAttribute("ActiveState") then
+            btn.BackgroundColor3 = COR_PANEL
+            bs.Color = COR_LINHA_D
+            bs.Transparency = 0.5
+            accent.BackgroundColor3 = iconeCor
+        end
+    end)
+
     return btn
 end
 
-local tpPlayerBtn = createButton("Select Player", 34)
-local clearBtn    = createButton("Clear Portals", 53)
-local voidBtn     = createButton("🌑 Void", 72)
-local marcacaoBtn = createButton("🎯 Marcação [0/2]", 91)
-local antiTPBtn   = createButton("🔒 Anti-TP [OFF]", 110)
-local closeBtn    = createButton("Close", 134)
+--=============================================================
+-- Botões
+--=============================================================
+local tpPlayerBtn = createButton("▸ SELECT TARGET", 44, COR_LINHA)
+local clearBtn    = createButton("▸ CLEAR PORTALS", 62, COR_CIANO)
+local voidBtn     = createButton("▸ VOID DIMENSION", 80, COR_VERMELHO)
+local marcacaoBtn = createButton("▸ MARCAÇÃO [0/2]", 98, Color3.fromRGB(255, 180, 40))
+local antiTPBtn   = createButton("▸ ANTI-TP [OFF]", 116, COR_VERMELHO)
+local closeBtn    = createButton("✕ CLOSE SESSION", 138, COR_VERMELHO)
 
-closeBtn.BackgroundColor3 = Color3.fromRGB(100, 25, 25)
-closeBtn.TextColor3 = Color3.fromRGB(255, 200, 200)
-local closeStroke = closeBtn:FindFirstChildOfClass("UIStroke")
-if closeStroke then closeStroke.Color = Color3.fromRGB(200, 50, 50) end
-
-voidBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-voidBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
-local voidStroke = voidBtn:FindFirstChildOfClass("UIStroke")
-if voidStroke then voidStroke.Color = Color3.fromRGB(0, 0, 0) end
-voidBtn.MouseEnter:Connect(function()
-    voidBtn.BackgroundColor3 = Color3.fromRGB(230, 230, 230)
-end)
-voidBtn.MouseLeave:Connect(function()
-    if not voidBtn:GetAttribute("ActiveState") then
-        voidBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    end
-end)
-
-marcacaoBtn.BackgroundColor3 = Color3.fromRGB(255, 200, 50)
-marcacaoBtn.TextColor3 = Color3.fromRGB(50, 30, 0)
+local closeStroke    = closeBtn:FindFirstChildOfClass("UIStroke")
+local voidStroke     = voidBtn:FindFirstChildOfClass("UIStroke")
 local marcacaoStroke = marcacaoBtn:FindFirstChildOfClass("UIStroke")
-if marcacaoStroke then marcacaoStroke.Color = Color3.fromRGB(180, 130, 0) end
-marcacaoBtn.MouseEnter:Connect(function()
-    marcacaoBtn.BackgroundColor3 = Color3.fromRGB(255, 220, 100)
-end)
-marcacaoBtn.MouseLeave:Connect(function()
-    local state = marcacaoBtn:GetAttribute("ActiveState") or 0
-    if state == 0 then
-        marcacaoBtn.BackgroundColor3 = Color3.fromRGB(255, 200, 50)
-    elseif state == 1 then
-        marcacaoBtn.BackgroundColor3 = Color3.fromRGB(255, 140, 0)
-    elseif state == 2 then
-        marcacaoBtn.BackgroundColor3 = Color3.fromRGB(40, 140, 50)
-    end
-end)
+local antiTPStroke   = antiTPBtn:FindFirstChildOfClass("UIStroke")
 
-antiTPBtn.BackgroundColor3 = Color3.fromRGB(100, 25, 25)
-antiTPBtn.TextColor3 = Color3.fromRGB(255, 200, 200)
-local antiTPStroke = antiTPBtn:FindFirstChildOfClass("UIStroke")
-if antiTPStroke then antiTPStroke.Color = Color3.fromRGB(200, 50, 50) end
+if voidStroke then
+    voidStroke.Color = COR_VERMELHO
+    voidStroke.Transparency = 0.3
+end
+
+if marcacaoStroke then
+    marcacaoStroke.Color = Color3.fromRGB(180, 130, 0)
+    marcacaoStroke.Transparency = 0.4
+end
+
+if antiTPStroke then
+    antiTPStroke.Color = COR_VERMELHO
+    antiTPStroke.Transparency = 0.4
+end
+
+if closeStroke then
+    closeStroke.Color = COR_VERMELHO
+    closeStroke.Transparency = 0.2
+end
 
 local footerLabel = Instance.new("TextLabel")
-footerLabel.Size = UDim2.new(1, 0, 0, 8)
-footerLabel.Position = UDim2.new(0, 0, 1, -9)
+footerLabel.Size = UDim2.new(1, -8, 0, 8)
+footerLabel.Position = UDim2.new(0, 4, 1, -10)
 footerLabel.BackgroundTransparency = 1
-footerLabel.Text = "Prime Rick"
-footerLabel.TextColor3 = Color3.fromRGB(60, 120, 70)
+footerLabel.Text = "◢ PRIME RICK — C-137 ◣"
+footerLabel.TextColor3 = COR_TEXTO_D
 footerLabel.Font = Enum.Font.Code
 footerLabel.TextSize = 5
+footerLabel.ZIndex = 4
 footerLabel.Parent = innerScreen
 
 --=============================================================
@@ -810,79 +850,128 @@ footerLabel.Parent = innerScreen
 local slidingPanel = Instance.new("Frame")
 slidingPanel.Size = UDim2.new(0, 0, 1, 0)
 slidingPanel.Position = UDim2.new(1, -5, 0, 0)
-slidingPanel.BackgroundColor3 = Color3.fromRGB(35, 38, 42)
+slidingPanel.BackgroundColor3 = COR_BG
 slidingPanel.BorderSizePixel = 0
 slidingPanel.ClipsDescendants = true
 slidingPanel.ZIndex = -1
 slidingPanel.Parent = mainFrame
 
 local panelCorner = Instance.new("UICorner")
-panelCorner.CornerRadius = UDim.new(0, 5)
+panelCorner.CornerRadius = UDim.new(0, 2)
 panelCorner.Parent = slidingPanel
 
 local panelStroke = Instance.new("UIStroke")
-panelStroke.Color = Color3.fromRGB(100, 105, 110)
-panelStroke.Thickness = 1.5
+panelStroke.Color = COR_LINHA_D
+panelStroke.Thickness = 1
+panelStroke.Transparency = 0.3
 panelStroke.Parent = slidingPanel
 
 local panelInner = Instance.new("Frame")
 panelInner.Size = UDim2.new(1, -8, 1, -8)
 panelInner.Position = UDim2.new(0, 4, 0, 4)
-panelInner.BackgroundColor3 = Color3.fromRGB(12, 18, 14)
+panelInner.BackgroundColor3 = COR_INNER
+panelInner.BorderSizePixel = 0
 panelInner.Parent = slidingPanel
 
 local pInnerCorner = Instance.new("UICorner")
-pInnerCorner.CornerRadius = UDim.new(0, 4)
+pInnerCorner.CornerRadius = UDim.new(0, 2)
 pInnerCorner.Parent = panelInner
 
 local panelTitle = Instance.new("TextLabel")
-panelTitle.Size = UDim2.new(1, -25, 0, 13)
+panelTitle.Size = UDim2.new(1, -30, 0, 13)
 panelTitle.BackgroundTransparency = 1
-panelTitle.Text = "🌀 TARGETS 🌀"
-panelTitle.TextColor3 = Color3.fromRGB(50, 255, 100)
-panelTitle.Font = Enum.Font.GothamBold
+panelTitle.Text = "▰ TARGETS"
+panelTitle.TextColor3 = COR_LINHA
+panelTitle.Font = Enum.Font.Code
 panelTitle.TextSize = 7
 panelTitle.TextXAlignment = Enum.TextXAlignment.Left
-panelTitle.Position = UDim2.new(0, 3, 0, 0)
+panelTitle.Position = UDim2.new(0, 4, 0, 0)
+panelTitle.ZIndex = 4
 panelTitle.Parent = panelInner
 
--- 🔄 Botão de Refresh
 local refreshBtn = Instance.new("TextButton")
 refreshBtn.Name = "RefreshBtn"
 refreshBtn.Size = UDim2.new(0, 20, 0, 13)
-refreshBtn.Position = UDim2.new(1, -22, 0, 0)
-refreshBtn.BackgroundColor3 = Color3.fromRGB(20, 50, 30)
-refreshBtn.Text = "🔄"
-refreshBtn.TextColor3 = Color3.fromRGB(180, 255, 180)
-refreshBtn.Font = Enum.Font.GothamBold
-refreshBtn.TextSize = 9
+refreshBtn.Position = UDim2.new(1, -24, 0, 0)
+refreshBtn.BackgroundColor3 = COR_PANEL
+refreshBtn.Text = "⟳"
+refreshBtn.TextColor3 = COR_LINHA
+refreshBtn.Font = Enum.Font.Code
+refreshBtn.TextSize = 11
 refreshBtn.AutoButtonColor = false
+refreshBtn.BorderSizePixel = 0
+refreshBtn.ZIndex = 4
 refreshBtn.Parent = panelInner
 
 local refreshCorner = Instance.new("UICorner")
-refreshCorner.CornerRadius = UDim.new(0, 3)
+refreshCorner.CornerRadius = UDim.new(0, 2)
 refreshCorner.Parent = refreshBtn
 
 local refreshStroke = Instance.new("UIStroke")
-refreshStroke.Color = Color3.fromRGB(40, 160, 70)
+refreshStroke.Color = COR_LINHA_D
 refreshStroke.Thickness = 1
+refreshStroke.Transparency = 0.3
 refreshStroke.Parent = refreshBtn
 
 refreshBtn.MouseEnter:Connect(function()
-    refreshBtn.BackgroundColor3 = Color3.fromRGB(30, 80, 40)
+    refreshBtn.BackgroundColor3 = Color3.fromRGB(20, 30, 24)
+    refreshStroke.Color = COR_LINHA
+    refreshStroke.Transparency = 0.1
 end)
 
 refreshBtn.MouseLeave:Connect(function()
-    refreshBtn.BackgroundColor3 = Color3.fromRGB(20, 50, 30)
+    refreshBtn.BackgroundColor3 = COR_PANEL
+    refreshStroke.Color = COR_LINHA_D
+    refreshStroke.Transparency = 0.3
+end)
+
+local searchBox = Instance.new("TextBox")
+searchBox.Name = "SearchBox"
+searchBox.Size = UDim2.new(1, -8, 0, 15)
+searchBox.Position = UDim2.new(0, 4, 0, 13)
+searchBox.BackgroundColor3 = COR_PANEL
+searchBox.BackgroundTransparency = 0.2
+searchBox.Text = ""
+searchBox.PlaceholderText = "▸ pesquisar..."
+searchBox.TextColor3 = COR_TEXTO
+searchBox.PlaceholderColor3 = COR_TEXTO_D
+searchBox.Font = Enum.Font.Code
+searchBox.TextSize = 6
+searchBox.TextXAlignment = Enum.TextXAlignment.Left
+searchBox.ClearTextOnFocus = false
+searchBox.BorderSizePixel = 0
+searchBox.ZIndex = 4
+searchBox.Parent = panelInner
+
+local searchCorner = Instance.new("UICorner")
+searchCorner.CornerRadius = UDim.new(0, 2)
+searchCorner.Parent = searchBox
+
+local searchStroke = Instance.new("UIStroke")
+searchStroke.Color = COR_LINHA_D
+searchStroke.Thickness = 1
+searchStroke.Transparency = 0.4
+searchStroke.Parent = searchBox
+
+searchBox.Focused:Connect(function()
+    searchStroke.Color = COR_LINHA
+    searchStroke.Transparency = 0.1
+end)
+
+searchBox.FocusLost:Connect(function()
+    searchStroke.Color = COR_LINHA_D
+    searchStroke.Transparency = 0.4
 end)
 
 local scrollingList = Instance.new("ScrollingFrame")
-scrollingList.Size = UDim2.new(1, -6, 1, -19)
-scrollingList.Position = UDim2.new(0, 3, 0, 15)
+scrollingList.Size = UDim2.new(1, -8, 1, -34)
+scrollingList.Position = UDim2.new(0, 4, 0, 30)
 scrollingList.BackgroundTransparency = 1
 scrollingList.BorderSizePixel = 0
 scrollingList.CanvasSize = UDim2.new(0, 0, 0, 0)
 scrollingList.ScrollBarThickness = 2
+scrollingList.ScrollBarImageColor3 = COR_LINHA
+scrollingList.ZIndex = 3
 scrollingList.Parent = panelInner
 
 local uiListLayout = Instance.new("UIListLayout")
@@ -892,6 +981,7 @@ uiListLayout.Parent = scrollingList
 
 local panelOpen = false
 local playerBtns = {}
+local filtroAtivo = ""
 
 --=============================================================
 -- PORTAL INSTANCE
@@ -992,28 +1082,28 @@ local function createPortalInstance(cframe, tag, opcoes)
 end
 
 --=============================================================
--- 🌀 PORTAL DE SAÍDA (só 1, atrás de você, parado, fecha encolhendo)
+-- 🌀 PORTAL DE SAÍDA (nas costas, com rotação)
 --=============================================================
 local function spawnPortalSaida(char)
     if not char or not char.Parent then return end
     local root = char:FindFirstChild("HumanoidRootPart")
     if not root then return end
 
-    -- 🎯 CFrame base = posição atual
-    local cframeBase = root.CFrame
+    local cframeAtual = root.CFrame
+    local frente = cframeAtual.LookVector
+    local costas = -frente
 
-    -- 🌀 Portal ATRÁS (2.5 studs atrás de você)
-    local cframeAtras = cframeBase * CFrame.new(0, 0, 2.5)
-    local portalAtras = createPortalInstance(cframeAtras, TAG_SAIDA, {
+    local posicaoCostas = root.Position + costas * 2.5
+    local cframeFinal = CFrame.new(posicaoCostas, posicaoCostas + frente)
+
+    local portalAtras = createPortalInstance(cframeFinal, TAG_SAIDA, {
         comSom = false,
         comParticulas = false,
         comGiro = true,
     })
 
-    -- 🔦 Fundo transparente (só a textura aparece)
     if portalAtras then portalAtras.Transparency = 1 end
 
-    -- ⏱️ Fecha depois de um tempo (com animação de encolher)
     task.delay(0.6, function()
         if portalAtras and portalAtras.Parent then
             fecharPortal(portalAtras)
@@ -1036,7 +1126,9 @@ local function abrirPortalVoid()
         TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
         { Size = UDim2.new(0, 0, 1, 0) }
     ):Play()
-    tpPlayerBtn.BackgroundColor3 = Color3.fromRGB(20, 35, 25)
+    tpPlayerBtn.BackgroundColor3 = COR_PANEL
+    local tpLbl = tpPlayerBtn:FindFirstChildOfClass("TextLabel")
+    if tpLbl then tpLbl.TextColor3 = COR_TEXTO end
 
     local char = player.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
@@ -1045,12 +1137,13 @@ local function abrirPortalVoid()
     criarLocalTP(root.Position)
 
     local voidPortal = createPortalInstance(root.CFrame * CFrame.new(0, 0, -5), TAG_VOID)
-    voidBtn.Text = "Enter Void Portal!"
+    local lblVoid = voidBtn:FindFirstChildOfClass("TextLabel")
+    if lblVoid then lblVoid.Text = "▸ ENTER VOID" end
 
     local resetAtivo = true
     task.delay(15, function()
         if resetAtivo and voidPortal and voidPortal.Parent then
-            voidBtn.Text = "🌑 Void"
+            if lblVoid then lblVoid.Text = "▸ VOID DIMENSION" end
             fecharPortal(voidPortal)
         end
     end)
@@ -1081,7 +1174,7 @@ local function abrirPortalVoid()
                 CFrame.new(VOID_CENTRO.X, VOID_CENTRO.Y + 3, VOID_CENTRO.Z - 8),
                 TAG_RET
             )
-            voidBtn.Text = "🌑 Void"
+            if lblVoid then lblVoid.Text = "▸ VOID DIMENSION" end
 
             local voltouTouched = false
             portalVolta.Touched:Connect(function(hitBack)
@@ -1134,10 +1227,16 @@ local function limparMarcacao()
     if marcacaoP2 and marcacaoP2.Parent then fecharPortal(marcacaoP2) end
     marcacaoP1, marcacaoP2 = nil, nil
 
-    marcacaoBtn.Text = "🎯 Marcação [0/2]"
-    marcacaoBtn.BackgroundColor3 = Color3.fromRGB(255, 200, 50)
-    marcacaoBtn.TextColor3 = Color3.fromRGB(50, 30, 0)
-    if marcacaoStroke then marcacaoStroke.Color = Color3.fromRGB(180, 130, 0) end
+    local lbl = marcacaoBtn:FindFirstChildOfClass("TextLabel")
+    if lbl then
+        lbl.Text = "▸ MARCAÇÃO [0/2]"
+        lbl.TextColor3 = COR_TEXTO
+    end
+    marcacaoBtn.BackgroundColor3 = COR_PANEL
+    if marcacaoStroke then
+        marcacaoStroke.Color = Color3.fromRGB(180, 130, 0)
+        marcacaoStroke.Transparency = 0.4
+    end
     marcacaoBtn:SetAttribute("ActiveState", 0)
     getgenv().Marcacao_Ativo = false
 end
@@ -1184,10 +1283,16 @@ local function clicarMarcacao()
 
         marcacaoP1 = createPortalInstance(root.CFrame * CFrame.new(0, 0, -5), TAG_M1)
 
-        marcacaoBtn.Text = "🎯 Marcação [1/2]"
-        marcacaoBtn.BackgroundColor3 = Color3.fromRGB(255, 140, 0)
-        marcacaoBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        if marcacaoStroke then marcacaoStroke.Color = Color3.fromRGB(255, 200, 100) end
+        local lbl = marcacaoBtn:FindFirstChildOfClass("TextLabel")
+        if lbl then
+            lbl.Text = "▸ MARCAÇÃO [1/2]"
+            lbl.TextColor3 = Color3.fromRGB(255, 220, 180)
+        end
+        marcacaoBtn.BackgroundColor3 = Color3.fromRGB(30, 25, 10)
+        if marcacaoStroke then
+            marcacaoStroke.Color = Color3.fromRGB(255, 180, 40)
+            marcacaoStroke.Transparency = 0.1
+        end
         marcacaoBtn:SetAttribute("ActiveState", 1)
         getgenv().Marcacao_Ativo = true
 
@@ -1197,10 +1302,16 @@ local function clicarMarcacao()
 
         marcacaoP2 = createPortalInstance(root.CFrame * CFrame.new(0, 0, -5), TAG_M2)
 
-        marcacaoBtn.Text = "🎯 Marcação [2/2]"
-        marcacaoBtn.BackgroundColor3 = Color3.fromRGB(40, 140, 50)
-        marcacaoBtn.TextColor3 = Color3.fromRGB(200, 255, 210)
-        if marcacaoStroke then marcacaoStroke.Color = Color3.fromRGB(80, 200, 100) end
+        local lbl = marcacaoBtn:FindFirstChildOfClass("TextLabel")
+        if lbl then
+            lbl.Text = "▸ MARCAÇÃO [2/2]"
+            lbl.TextColor3 = Color3.fromRGB(180, 255, 200)
+        end
+        marcacaoBtn.BackgroundColor3 = Color3.fromRGB(15, 35, 20)
+        if marcacaoStroke then
+            marcacaoStroke.Color = COR_LINHA
+            marcacaoStroke.Transparency = 0.1
+        end
         marcacaoBtn:SetAttribute("ActiveState", 2)
 
         conectarPortais(marcacaoP1, marcacaoP2)
@@ -1212,37 +1323,92 @@ local function clicarMarcacao()
 end
 
 --=============================================================
--- PLAYER LIST (INCREMENTAL)
+-- PLAYER LIST
 --=============================================================
+local function atualizarVisibilidade()
+    local count = 0
+    for _, child in ipairs(scrollingList:GetChildren()) do
+        if child:IsA("TextButton") then
+            local nome = child:GetAttribute("NomeJogador") or ""
+            local bate = (filtroAtivo == "") or (nome:lower():find(filtroAtivo:lower(), 1, true) ~= nil)
+            child.Visible = bate
+            if bate then
+                count = count + 1
+                child.LayoutOrder = count
+            end
+        end
+    end
+    return count
+end
+
 local function criarBotaoPlayer(p, layoutOrder)
     local pBtn = Instance.new("TextButton")
     pBtn.Size = UDim2.new(1, 0, 0, 17)
-    pBtn.BackgroundColor3 = Color3.fromRGB(22, 38, 25)
-    pBtn.TextColor3 = Color3.fromRGB(180, 255, 180)
-    pBtn.Text = "👤 " .. p.DisplayName
-    pBtn.Font = Enum.Font.Gotham
-    pBtn.TextSize = 6
+    pBtn.BackgroundColor3 = COR_PANEL
+    pBtn.BackgroundTransparency = 0.3
+    pBtn.Text = ""
+    pBtn.AutoButtonColor = false
+    pBtn.BorderSizePixel = 0
     pBtn.LayoutOrder = layoutOrder
+    pBtn.Visible = true
+    pBtn.ZIndex = 3
+    pBtn:SetAttribute("NomeJogador", p.Name)
     pBtn.Parent = scrollingList
 
     local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, 3)
+    c.CornerRadius = UDim.new(0, 2)
     c.Parent = pBtn
 
     local bStroke = Instance.new("UIStroke")
-    bStroke.Color = Color3.fromRGB(40, 110, 50)
+    bStroke.Color = COR_LINHA_D
     bStroke.Thickness = 1
+    bStroke.Transparency = 0.5
     bStroke.Parent = pBtn
+
+    local accent = Instance.new("Frame")
+    accent.Size = UDim2.new(0, 2, 1, -6)
+    accent.Position = UDim2.new(0, 0, 0, 3)
+    accent.BackgroundColor3 = COR_LINHA_D
+    accent.BorderSizePixel = 0
+    accent.ZIndex = 4
+    accent.Parent = pBtn
+
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(1, -10, 1, 0)
+    lbl.Position = UDim2.new(0, 8, 0, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = "▸ " .. p.DisplayName
+    lbl.TextColor3 = COR_TEXTO
+    lbl.Font = Enum.Font.Code
+    lbl.TextSize = 6
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.ZIndex = 4
+    lbl.Parent = pBtn
 
     task.spawn(function()
         local isFriend = false
         pcall(function() isFriend = player:IsFriendsWith(p.UserId) end)
         if isFriend and pBtn and pBtn.Parent then
-            pBtn.BackgroundColor3 = Color3.fromRGB(45, 20, 20)
-            pBtn.TextColor3 = Color3.fromRGB(255, 120, 120)
-            bStroke.Color = Color3.fromRGB(150, 40, 40)
-            pBtn.Text = "❤️ " .. p.DisplayName
+            lbl.Text = "♥ " .. p.DisplayName
+            lbl.TextColor3 = Color3.fromRGB(255, 120, 120)
+            accent.BackgroundColor3 = COR_VERMELHO
+            bStroke.Color = COR_VERMELHO
+            bStroke.Transparency = 0.3
         end
+    end)
+
+    pBtn.MouseEnter:Connect(function()
+        pBtn.BackgroundColor3 = Color3.fromRGB(20, 30, 24)
+        bStroke.Color = COR_LINHA
+        bStroke.Transparency = 0.2
+        accent.BackgroundColor3 = COR_GLOW
+    end)
+
+    pBtn.MouseLeave:Connect(function()
+        pBtn.BackgroundColor3 = COR_PANEL
+        bStroke.Color = COR_LINHA_D
+        bStroke.Transparency = 0.5
+        accent.BackgroundColor3 = COR_LINHA_D
     end)
 
     pBtn.MouseButton1Click:Connect(function()
@@ -1255,19 +1421,21 @@ local function criarBotaoPlayer(p, layoutOrder)
             TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
             { Size = UDim2.new(0, 0, 1, 0) }
         ):Play()
-        tpPlayerBtn.BackgroundColor3 = Color3.fromRGB(20, 35, 25)
+        tpPlayerBtn.BackgroundColor3 = COR_PANEL
+        local tpLbl = tpPlayerBtn:FindFirstChildOfClass("TextLabel")
+        if tpLbl then tpLbl.TextColor3 = COR_TEXTO end
 
         local char = player.Character
         local root = char and char:FindFirstChild("HumanoidRootPart")
         if not root then return end
 
         local portalEntrada = createPortalInstance(root.CFrame * CFrame.new(0, 0, -5), TAG_GEN)
-        tpPlayerBtn.Text = "Enter Portal!"
+        if tpLbl then tpLbl.Text = "▸ ENTER PORTAL" end
 
         local resetAtivo = true
         task.delay(15, function()
             if resetAtivo and portalEntrada and portalEntrada.Parent then
-                tpPlayerBtn.Text = "Select Player"
+                if tpLbl then tpLbl.Text = "▸ SELECT TARGET" end
                 fecharPortal(portalEntrada)
             end
         end)
@@ -1277,7 +1445,7 @@ local function criarBotaoPlayer(p, layoutOrder)
             if touched or hit.Parent ~= char then return end
             touched = true
             resetAtivo = false
-            tpPlayerBtn.Text = "Jumping..."
+            if tpLbl then tpLbl.Text = "▸ JUMPING..." end
 
             playTPSound()
             efeitoTP()
@@ -1291,9 +1459,9 @@ local function criarBotaoPlayer(p, layoutOrder)
             task.delay(0.2, function()
                 local targetChar = p.Character
                 if not targetChar then
-                    tpPlayerBtn.Text = "No Target!"
+                    if tpLbl then tpLbl.Text = "▸ NO TARGET!" end
                     task.wait(1.5)
-                    tpPlayerBtn.Text = "Select Player"
+                    if tpLbl then tpLbl.Text = "▸ SELECT TARGET" end
                     return
                 end
 
@@ -1305,8 +1473,12 @@ local function criarBotaoPlayer(p, layoutOrder)
                 if not currentRoot then return end
 
                 if actualRoot then
-                    currentRoot.CFrame = actualRoot.CFrame * CFrame.new(0, 0, -10)
-                    tpPlayerBtn.Text = "Select Player"
+                    -- 🎯 Fica 10 studs na frente do alvo, olhando pra ele
+                    local posAlvo = actualRoot.Position
+                    local frenteAlvo = actualRoot.CFrame.LookVector
+                    local posFinal = posAlvo + frenteAlvo * 10
+                    currentRoot.CFrame = CFrame.new(posFinal, posAlvo)
+                    if tpLbl then tpLbl.Text = "▸ SELECT TARGET" end
                 else
                     currentRoot.CFrame = targetPivot * CFrame.new(0, 5, 0)
                     currentRoot.Anchored = true
@@ -1322,13 +1494,17 @@ local function criarBotaoPlayer(p, layoutOrder)
                     end
 
                     if actualRoot then
-                        currentRoot.CFrame = actualRoot.CFrame * CFrame.new(0, 0, -10)
+                        -- 🎯 Fica 10 studs na frente do alvo, olhando pra ele
+                        local posAlvo = actualRoot.Position
+                        local frenteAlvo = actualRoot.CFrame.LookVector
+                        local posFinal = posAlvo + frenteAlvo * 10
+                        currentRoot.CFrame = CFrame.new(posFinal, posAlvo)
                     else
-                        tpPlayerBtn.Text = "Ghosted!"
+                        if tpLbl then tpLbl.Text = "▸ GHOSTED!" end
                         task.wait(1.5)
                     end
                     currentRoot.Anchored = false
-                    tpPlayerBtn.Text = "Select Player"
+                    if tpLbl then tpLbl.Text = "▸ SELECT TARGET" end
                 end
 
                 task.wait(0.05)
@@ -1352,22 +1528,24 @@ local function refreshPlayerList()
         end
     end
 
-    local count = 0
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= player then
-            count = count + 1
-
-            if playerBtns[p.UserId] then
-                playerBtns[p.UserId].LayoutOrder = count
-            else
-                playerBtns[p.UserId] = criarBotaoPlayer(p, count)
+            if not playerBtns[p.UserId] then
+                playerBtns[p.UserId] = criarBotaoPlayer(p, 0)
             end
         end
     end
 
+    local count = atualizarVisibilidade()
     scrollingList.CanvasSize = UDim2.new(0, 0, 0, count * 19)
     return count
 end
+
+searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+    filtroAtivo = searchBox.Text
+    local count = atualizarVisibilidade()
+    scrollingList.CanvasSize = UDim2.new(0, 0, 0, count * 19)
+end)
 
 refreshBtn.MouseButton1Click:Connect(function()
     refreshBtn.Text = "⏳"
@@ -1375,21 +1553,21 @@ refreshBtn.MouseButton1Click:Connect(function()
     local count = refreshPlayerList()
 
     TweenService:Create(refreshBtn, TweenInfo.new(0.15, Enum.EasingStyle.Quad), {
-        BackgroundColor3 = Color3.fromRGB(40, 140, 50)
+        BackgroundColor3 = Color3.fromRGB(30, 60, 40)
     }):Play()
 
     task.wait(0.3)
 
-    refreshBtn.Text = "🔄"
+    refreshBtn.Text = "⟳"
     TweenService:Create(refreshBtn, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
-        BackgroundColor3 = Color3.fromRGB(20, 50, 30)
+        BackgroundColor3 = COR_PANEL
     }):Play()
 
-    panelTitle.Text = "🌀 TARGETS (" .. count .. ") 🌀"
+    panelTitle.Text = "▰ TARGETS (" .. count .. ")"
 
     task.delay(2, function()
         if panelTitle and panelTitle.Parent then
-            panelTitle.Text = "🌀 TARGETS 🌀"
+            panelTitle.Text = "▰ TARGETS"
         end
     end)
 end)
@@ -1402,9 +1580,10 @@ tpPlayerBtn.MouseButton1Click:Connect(function()
     local otherCount = refreshPlayerList()
 
     if otherCount == 0 then
-        tpPlayerBtn.Text = "No Players!"
+        local lbl = tpPlayerBtn:FindFirstChildOfClass("TextLabel")
+        if lbl then lbl.Text = "▸ NO PLAYERS!" end
         task.wait(1.5)
-        tpPlayerBtn.Text = "Select Player"
+        if lbl then lbl.Text = "▸ SELECT TARGET" end
         if panelOpen then
             panelOpen = false
             tpPlayerBtn:SetAttribute("ActiveState", false)
@@ -1413,7 +1592,7 @@ tpPlayerBtn.MouseButton1Click:Connect(function()
                 TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
                 { Size = UDim2.new(0, 0, 1, 0) }
             ):Play()
-            tpPlayerBtn.BackgroundColor3 = Color3.fromRGB(20, 35, 25)
+            tpPlayerBtn.BackgroundColor3 = COR_PANEL
         end
         return
     end
@@ -1422,12 +1601,12 @@ tpPlayerBtn.MouseButton1Click:Connect(function()
     local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
     if panelOpen then
         tpPlayerBtn:SetAttribute("ActiveState", true)
-        TweenService:Create(slidingPanel, tweenInfo, { Size = UDim2.new(0, 66, 1, 0) }):Play()
-        tpPlayerBtn.BackgroundColor3 = Color3.fromRGB(40, 140, 50)
+        TweenService:Create(slidingPanel, tweenInfo, { Size = UDim2.new(0, 72, 1, 0) }):Play()
+        tpPlayerBtn.BackgroundColor3 = Color3.fromRGB(20, 40, 25)
     else
         tpPlayerBtn:SetAttribute("ActiveState", false)
         TweenService:Create(slidingPanel, tweenInfo, { Size = UDim2.new(0, 0, 1, 0) }):Play()
-        tpPlayerBtn.BackgroundColor3 = Color3.fromRGB(20, 35, 25)
+        tpPlayerBtn.BackgroundColor3 = COR_PANEL
     end
 end)
 
@@ -1445,12 +1624,7 @@ Players.PlayerRemoving:Connect(function(p)
         playerBtns[p.UserId] = nil
     end
 
-    local count = 0
-    for _, child in ipairs(scrollingList:GetChildren()) do
-        if child:IsA("TextButton") and child.Name ~= "RefreshBtn" then
-            count = count + 1
-        end
-    end
+    local count = atualizarVisibilidade()
     scrollingList.CanvasSize = UDim2.new(0, 0, 0, count * 19)
 
     if panelOpen and count == 0 then
@@ -1461,7 +1635,7 @@ Players.PlayerRemoving:Connect(function(p)
             TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
             { Size = UDim2.new(0, 0, 1, 0) }
         ):Play()
-        tpPlayerBtn.BackgroundColor3 = Color3.fromRGB(20, 35, 25)
+        tpPlayerBtn.BackgroundColor3 = COR_PANEL
     end
 end)
 
@@ -1477,22 +1651,34 @@ antiTPBtn.MouseButton1Click:Connect(function()
     antiTPBtn:SetAttribute("ActiveState", ativo)
     getgenv().AntiTP_Ativo = ativo
 
+    local lbl = antiTPBtn:FindFirstChildOfClass("TextLabel")
+
     if ativo then
-        antiTPBtn.Text = "🔒 Anti-TP [ON]"
-        antiTPBtn.BackgroundColor3 = Color3.fromRGB(40, 140, 50)
-        antiTPBtn.TextColor3 = Color3.fromRGB(200, 255, 210)
-        if antiTPStroke then antiTPStroke.Color = Color3.fromRGB(80, 200, 100) end
+        if lbl then
+            lbl.Text = "▸ ANTI-TP [ON]"
+            lbl.TextColor3 = COR_LINHA
+        end
+        antiTPBtn.BackgroundColor3 = Color3.fromRGB(15, 35, 20)
+        if antiTPStroke then
+            antiTPStroke.Color = COR_LINHA
+            antiTPStroke.Transparency = 0.1
+        end
         atpUltPos, atpUltimoCheck, atpCooldown = nil, 0, false
     else
-        antiTPBtn.Text = "🔒 Anti-TP [OFF]"
-        antiTPBtn.BackgroundColor3 = Color3.fromRGB(100, 25, 25)
-        antiTPBtn.TextColor3 = Color3.fromRGB(255, 200, 200)
-        if antiTPStroke then antiTPStroke.Color = Color3.fromRGB(200, 50, 50) end
+        if lbl then
+            lbl.Text = "▸ ANTI-TP [OFF]"
+            lbl.TextColor3 = COR_TEXTO
+        end
+        antiTPBtn.BackgroundColor3 = COR_PANEL
+        if antiTPStroke then
+            antiTPStroke.Color = COR_VERMELHO
+            antiTPStroke.Transparency = 0.4
+        end
     end
 end)
 
 --=============================================================
--- ANTI-TP LOOP (SIMPLIFICADO — só distância)
+-- ANTI-TP LOOP
 --=============================================================
 local function antiTP_bloquear(posicaoAnterior, character)
     local hrp = character:FindFirstChild("HumanoidRootPart")
@@ -1578,15 +1764,17 @@ clearBtn.MouseButton1Click:Connect(function()
     local tinha = #activePortals > 0
     wipeAllPortals(true)
 
+    local lbl = clearBtn:FindFirstChildOfClass("TextLabel")
+
     if tinha then
-        clearBtn.Text = "Cleared!"
-        clearBtn.BackgroundColor3 = Color3.fromRGB(40, 140, 50)
+        if lbl then lbl.Text = "▸ CLEARED!" end
+        clearBtn.BackgroundColor3 = Color3.fromRGB(15, 35, 25)
         task.wait(0.6)
     end
 
-    clearBtn.Text = "Clear Portals"
+    if lbl then lbl.Text = "▸ CLEAR PORTALS" end
     if not clearBtn:GetAttribute("ActiveState") then
-        clearBtn.BackgroundColor3 = Color3.fromRGB(20, 35, 25)
+        clearBtn.BackgroundColor3 = COR_PANEL
     end
 end)
 
@@ -1633,11 +1821,11 @@ closeBtn.MouseButton1Click:Connect(function()
     local slideOutTween = TweenService:Create(
         mainFrame,
         TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.In),
-        { Position = UDim2.new(0, -130, 0.35, -87) }
+        { Position = UDim2.new(0, -150, 0.35, -100) }
     )
     slideOutTween:Play()
     slideOutTween.Completed:Wait()
     fullCleanup()
 end)
 
-print("✅ Prime Rick Portal GUI v15 + 1 portal atrás (2.5 studs) + TP 10 studs na frente")
+print("✅ Prime Rick Portal GUI v19 — TP virado pro alvo")
