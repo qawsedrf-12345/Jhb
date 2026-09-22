@@ -1,25 +1,14 @@
 --=============================================================
--- RICK PRIME v44 — ULTRA VISUAL EDITION
--- Portal GUI + Marcação + Anti-TP + Anti-Void
--- Delta Compatible + Efeitos cinematográficos
+-- RICK PRIME v45 — DELTA EXECUTOR EDITION
+-- Portal GUI + Marcação + Anti-TP + Anti-Void + ULTRA Visual
+-- Otimizado EXCLUSIVAMENTE para Delta Executor
 --=============================================================
 
 --=============================================================
--- ⚡ GETGENV SEGURO
+-- ⚡ GETGENV (Delta suporta 100%)
 --=============================================================
-local genv
-do
-    local ok, g = pcall(function()
-        if getgenv then return getgenv() end
-        return nil
-    end)
-    if ok and type(g) == "table" then
-        genv = g
-    else
-        local ok2, g2 = pcall(function() return _G end)
-        genv = (ok2 and type(g2) == "table") and g2 or {}
-    end
-end
+local genv = getgenv and getgenv() or {}
+if type(genv) ~= "table" then genv = {} end
 
 if genv.RickPortalCleanup then pcall(genv.RickPortalCleanup) end
 genv.AntiTP_Ativo = false
@@ -28,18 +17,29 @@ genv.Marcacao_Ativo = false
 --=============================================================
 -- ⚡ SERVICES
 --=============================================================
-local Players          = game:GetService("Players")
-local TweenService     = game:GetService("TweenService")
+local Players           = game:GetService("Players")
+local TweenService      = game:GetService("TweenService")
 local CollectionService = game:GetService("CollectionService")
-local SoundService     = game:GetService("SoundService")
-local Lighting         = game:GetService("Lighting")
-local RunService       = game:GetService("RunService")
-local TeleportService  = game:GetService("TeleportService")
-local player           = Players.LocalPlayer
+local SoundService      = game:GetService("SoundService")
+local Lighting          = game:GetService("Lighting")
+local RunService        = game:GetService("RunService")
+local TeleportService   = game:GetService("TeleportService")
 
+--=============================================================
+-- ⚡ FIX #1: Aguarda LocalPlayer corretamente (Delta-safe)
+--=============================================================
+local player = Players.LocalPlayer
 if not player then
-    player = Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
-    player = Players.LocalPlayer
+    local tries = 0
+    repeat
+        task.wait(0.1)
+        player = Players.LocalPlayer
+        tries = tries + 1
+    until player or tries > 50
+end
+if not player then
+    warn("[RickPrime] ❌ LocalPlayer não encontrado")
+    return
 end
 
 -- Limpa efeitos antigos
@@ -50,38 +50,54 @@ for _, fx in ipairs(Lighting:GetChildren()) do
 end
 
 --=============================================================
--- ⚡ GUI PARENT (fallback triplo)
+-- ⚡ FIX #2: GUI PARENT Delta-específico
 --=============================================================
 local GUI_PARENT
 do
+    -- Delta: tenta gethui() primeiro
     local ok1, hui = pcall(function()
         if gethui then return gethui() end
+        return nil
     end)
-    if ok1 and hui and typeof(hui) == "Instance" then
-        GUI_PARENT = hui
+    if ok1 and hui then
+        local okType = pcall(function()
+            local testType = typeof and typeof(hui) or type(hui)
+            if testType == "Instance" or testType == "userdata" then
+                return true
+            end
+            return false
+        end)
+        if okType then
+            GUI_PARENT = hui
+        end
     end
 
+    -- Delta: fallback CoreGui
     if not GUI_PARENT then
-        local ok2, cg = pcall(function() return game:GetService("CoreGui") end)
+        local ok2, cg = pcall(function()
+            return game:GetService("CoreGui")
+        end)
         if ok2 and cg then
             local ok3 = pcall(function()
                 local test = Instance.new("Folder")
-                test.Name = "RP_Test_" .. tick()
+                test.Name = "RP_Test_" .. tostring(os.clock()):gsub("%.", "")
                 test.Parent = cg
+                task.wait()
                 test:Destroy()
             end)
             if ok3 then GUI_PARENT = cg end
         end
     end
 
+    -- Delta: último recurso PlayerGui (100% funcional)
     if not GUI_PARENT then
         local ok4, pg = pcall(function()
-            return player:WaitForChild("PlayerGui", 10)
+            return player:WaitForChild("PlayerGui", 15)
         end)
         if ok4 and pg then
             GUI_PARENT = pg
         else
-            warn("[RickPrime] ❌ Sem parent do GUI!")
+            warn("[RickPrime] ❌ Sem parent para o GUI")
             return
         end
     end
@@ -122,7 +138,7 @@ local marcacaoP1, marcacaoP2 = nil, nil
 local marcacaoConns = {}
 
 --=============================================================
--- 🎨 PALETA EXPANDIDA
+-- 🎨 PALETA
 --=============================================================
 local COR_BG        = Color3.fromRGB(8, 10, 9)
 local COR_PANEL     = Color3.fromRGB(15, 18, 16)
@@ -138,16 +154,12 @@ local COR_DOURADO   = Color3.fromRGB(255, 200, 50)
 local COR_DOURADO_D = Color3.fromRGB(180, 140, 30)
 local COR_ROXO      = Color3.fromRGB(160, 80, 255)
 local COR_OURO      = Color3.fromRGB(255, 230, 120)
-local COR_ROSA      = Color3.fromRGB(255, 100, 180)
 
---=============================================================
--- ATP config
---=============================================================
 local ATP = { DistanciaMax = 5, Cooldown = 0.2, OffsetY = 3, IgnorarJanela = 1.5 }
 local atpUltPos, atpUltimoCheck, atpCooldown, atpUltimoRespawn = nil, 0, false, 0
 
 --=============================================================
--- ✨ COLOR CORRECTION (dá tinta cinematográfica)
+-- ✨ COLOR CORRECTION
 --=============================================================
 local ccEffect = Instance.new("ColorCorrectionEffect")
 ccEffect.Name = "RP_ColorCorrection"
@@ -208,18 +220,6 @@ streaksContainer.Parent = fxGui
 --=============================================================
 -- ✨ HELPERS VISUAIS
 --=============================================================
-local function criarGradiente(parent, c1, c2, rotacao, transparencia)
-    local grad = Instance.new("UIGradient")
-    grad.Color = ColorSequence.new(c1, c2)
-    grad.Rotation = rotacao or 0
-    if transparencia then
-        grad.Transparency = transparencia
-    end
-    grad.Parent = parent
-    return grad
-end
-
--- ✨ Brilho pulsante no stroke
 local function criarBrilhoPulsante(parent, cor, minMs, maxMs)
     task.spawn(function()
         local stroke = parent:FindFirstChildOfClass("UIStroke")
@@ -227,22 +227,25 @@ local function criarBrilhoPulsante(parent, cor, minMs, maxMs)
         local corOriginal = stroke.Color
         local transOriginal = stroke.Transparency
         while parent and parent.Parent do
-            TweenService:Create(stroke, TweenInfo.new(math.random(minMs, maxMs) / 100, Enum.EasingStyle.Sine), {
-                Transparency = math.max(0, transOriginal - 0.3),
-                Color = cor
-            }):Play()
+            pcall(function()
+                TweenService:Create(stroke, TweenInfo.new(math.random(minMs, maxMs) / 100, Enum.EasingStyle.Sine), {
+                    Transparency = math.max(0, transOriginal - 0.3),
+                    Color = cor
+                }):Play()
+            end)
             task.wait(math.random(minMs, maxMs) / 100)
             if not (parent and parent.Parent) then break end
-            TweenService:Create(stroke, TweenInfo.new(math.random(minMs, maxMs) / 100, Enum.EasingStyle.Sine), {
-                Transparency = transOriginal,
-                Color = corOriginal
-            }):Play()
+            pcall(function()
+                TweenService:Create(stroke, TweenInfo.new(math.random(minMs, maxMs) / 100, Enum.EasingStyle.Sine), {
+                    Transparency = transOriginal,
+                    Color = corOriginal
+                }):Play()
+            end)
             task.wait(math.random(minMs, maxMs) / 100)
         end
     end)
 end
 
--- ✨ Partículas flutuando DENTRO do menu
 local function criarParticulasFlutuantes(container, quantidade, cor)
     task.spawn(function()
         while container and container.Parent do
@@ -264,12 +267,14 @@ local function criarParticulasFlutuantes(container, quantidade, cor)
 
                     local tempo = math.random(40, 90) / 10
                     local destino = UDim2.new(p.Position.X.Scale, 0, -0.1, 0)
-                    local tw = TweenService:Create(p, TweenInfo.new(tempo, Enum.EasingStyle.Linear), {
-                        Position = destino,
-                        BackgroundTransparency = 1
-                    })
-                    tw:Play()
-                    tw.Completed:Wait()
+                    pcall(function()
+                        local tw = TweenService:Create(p, TweenInfo.new(tempo, Enum.EasingStyle.Linear), {
+                            Position = destino,
+                            BackgroundTransparency = 1
+                        })
+                        tw:Play()
+                        tw.Completed:Wait()
+                    end)
                     if p and p.Parent then p:Destroy() end
                 end)
                 task.wait(0.15)
@@ -279,7 +284,6 @@ local function criarParticulasFlutuantes(container, quantidade, cor)
     end)
 end
 
--- ✨ Scanline animada
 local function criarScanline(parent, cor)
     task.spawn(function()
         while parent and parent.Parent do
@@ -300,11 +304,13 @@ local function criarScanline(parent, cor)
             })
             grad.Parent = linha
 
-            local tw = TweenService:Create(linha, TweenInfo.new(2.5, Enum.EasingStyle.Linear), {
-                Position = UDim2.new(0, 0, 1, 0),
-                BackgroundTransparency = 1
-            })
-            tw:Play()
+            pcall(function()
+                local tw = TweenService:Create(linha, TweenInfo.new(2.5, Enum.EasingStyle.Linear), {
+                    Position = UDim2.new(0, 0, 1, 0),
+                    BackgroundTransparency = 1
+                })
+                tw:Play()
+            end)
             task.wait(2.7)
             if linha and linha.Parent then linha:Destroy() end
         end
@@ -324,16 +330,20 @@ local function criarBlur(tamanho)
     blurEffect.Name = "RP_Blur"
     blurEffect.Size = 0
     blurEffect.Parent = Lighting
-    blurTween = TweenService:Create(blurEffect, TweenInfo.new(0.1, Enum.EasingStyle.Quad), {Size = tamanho})
-    blurTween:Play()
+    pcall(function()
+        blurTween = TweenService:Create(blurEffect, TweenInfo.new(0.1, Enum.EasingStyle.Quad), {Size = tamanho})
+        blurTween:Play()
+    end)
 end
 
 local function removerBlur(duracao)
     if not blurEffect then return end
     local b = blurEffect
     if blurTween then blurTween:Cancel() blurTween = nil end
-    blurTween = TweenService:Create(b, TweenInfo.new(duracao or 0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = 0})
-    blurTween:Play()
+    pcall(function()
+        blurTween = TweenService:Create(b, TweenInfo.new(duracao or 0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = 0})
+        blurTween:Play()
+    end)
     task.delay(duracao or 0.4, function()
         if b and b.Parent then b:Destroy() end
         if blurEffect == b then blurEffect = nil blurTween = nil end
@@ -345,50 +355,55 @@ local function flashTela(cor, duracao)
     flashFrame.BackgroundColor3 = cor
     flashFrame.BackgroundTransparency = 0
     if flashTween then flashTween:Cancel() end
-    flashTween = TweenService:Create(
-        flashFrame,
-        TweenInfo.new(duracao or 0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-        { BackgroundTransparency = 1 }
-    )
-    flashTween:Play()
+    pcall(function()
+        flashTween = TweenService:Create(
+            flashFrame,
+            TweenInfo.new(duracao or 0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+            { BackgroundTransparency = 1 }
+        )
+        flashTween:Play()
+    end)
 end
 
 local function alertaVermelho()
     alertaFrame.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
     alertaFrame.BackgroundTransparency = 0.3
-    TweenService:Create(
-        alertaFrame,
-        TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-        { BackgroundTransparency = 1 }
-    ):Play()
+    pcall(function()
+        TweenService:Create(
+            alertaFrame,
+            TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+            { BackgroundTransparency = 1 }
+        ):Play()
+    end)
 end
 
--- ✨ Pulso de cor cinematográfico
 local function pulsoCor(cor, duracao)
-    TweenService:Create(ccEffect, TweenInfo.new(0.08, Enum.EasingStyle.Quad), {
-        Saturation = 0.5,
-        Contrast = 0.3,
-        TintColor = cor
-    }):Play()
-    task.delay(0.08, function()
-        TweenService:Create(ccEffect, TweenInfo.new(duracao or 0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-            Saturation = 0,
-            Contrast = 0,
-            TintColor = Color3.fromRGB(255, 255, 255)
+    pcall(function()
+        TweenService:Create(ccEffect, TweenInfo.new(0.08, Enum.EasingStyle.Quad), {
+            Saturation = 0.5,
+            Contrast = 0.3,
+            TintColor = cor
         }):Play()
+    end)
+    task.delay(0.08, function()
+        pcall(function()
+            TweenService:Create(ccEffect, TweenInfo.new(duracao or 0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                Saturation = 0,
+                Contrast = 0,
+                TintColor = Color3.fromRGB(255, 255, 255)
+            }):Play()
+        end)
     end)
 end
 
 local MAX_PARTICULAS = 60
 local particulasAtivas = 0
 
---=============================================================
--- ✨ ONDAS (duplas: stroke colorido + branco fino)
---=============================================================
 local function efeitoOndas(quantidade, duracao, cor)
     task.spawn(function()
         for _ = 1, quantidade do
             task.spawn(function()
+                if not ondasContainer or not ondasContainer.Parent then return end
                 local ondaFrame = Instance.new("Frame")
                 ondaFrame.Size = UDim2.new(0, 0, 0, 0)
                 ondaFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
@@ -414,15 +429,17 @@ local function efeitoOndas(quantidade, duracao, cor)
                 s2.Transparency = 0.6
                 s2.Parent = ondaFrame
 
-                TweenService:Create(ondaFrame, TweenInfo.new(duracao, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-                    Size = UDim2.new(3.5, 0, 3.5, 0)
-                }):Play()
-                TweenService:Create(s, TweenInfo.new(duracao, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-                    Transparency = 1, Thickness = 1
-                }):Play()
-                TweenService:Create(s2, TweenInfo.new(duracao, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-                    Transparency = 1, Thickness = 0
-                }):Play()
+                pcall(function()
+                    TweenService:Create(ondaFrame, TweenInfo.new(duracao, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                        Size = UDim2.new(3.5, 0, 3.5, 0)
+                    }):Play()
+                    TweenService:Create(s, TweenInfo.new(duracao, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                        Transparency = 1, Thickness = 1
+                    }):Play()
+                    TweenService:Create(s2, TweenInfo.new(duracao, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                        Transparency = 1, Thickness = 0
+                    }):Play()
+                end)
 
                 task.wait(duracao)
                 if ondaFrame and ondaFrame.Parent then ondaFrame:Destroy() end
@@ -432,9 +449,6 @@ local function efeitoOndas(quantidade, duracao, cor)
     end)
 end
 
---=============================================================
--- ✨ PARTÍCULAS (com glow duplo)
---=============================================================
 local function efeitoParticulas(quantidade, cor, tamMax)
     tamMax = tamMax or 8
     task.spawn(function()
@@ -443,6 +457,10 @@ local function efeitoParticulas(quantidade, cor, tamMax)
             particulasAtivas = particulasAtivas + 1
 
             task.spawn(function()
+                if not particulasContainer or not particulasContainer.Parent then
+                    particulasAtivas = math.max(0, particulasAtivas - 1)
+                    return
+                end
                 local part = Instance.new("Frame")
                 local tam = math.random(3, tamMax)
                 part.Size = UDim2.new(0, tam, 0, tam)
@@ -458,7 +476,6 @@ local function efeitoParticulas(quantidade, cor, tamMax)
                 c.CornerRadius = UDim.new(1, 0)
                 c.Parent = part
 
-                -- Glow em volta
                 local glow = Instance.new("Frame")
                 glow.Size = UDim2.new(2, 0, 2, 0)
                 glow.Position = UDim2.new(0.5, 0, 0.5, 0)
@@ -475,17 +492,19 @@ local function efeitoParticulas(quantidade, cor, tamMax)
 
                 local angulo = math.random() * math.pi * 2
                 local distancia = math.random(80, 180) / 100
-                local tw = TweenService:Create(part, TweenInfo.new(math.random(40, 80) / 100, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-                    Position = UDim2.new(0.5 + math.cos(angulo) * distancia, 0, 0.5 + math.sin(angulo) * distancia, 0),
-                    BackgroundTransparency = 1,
-                    Size = UDim2.new(0, 0, 0, 0)
-                })
-                TweenService:Create(glow, TweenInfo.new(math.random(40, 80) / 100, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-                    BackgroundTransparency = 1,
-                    Size = UDim2.new(0, 0, 0, 0)
-                }):Play()
-                tw:Play()
-                tw.Completed:Wait()
+                pcall(function()
+                    local tw = TweenService:Create(part, TweenInfo.new(math.random(40, 80) / 100, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                        Position = UDim2.new(0.5 + math.cos(angulo) * distancia, 0, 0.5 + math.sin(angulo) * distancia, 0),
+                        BackgroundTransparency = 1,
+                        Size = UDim2.new(0, 0, 0, 0)
+                    })
+                    TweenService:Create(glow, TweenInfo.new(math.random(40, 80) / 100, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                        BackgroundTransparency = 1,
+                        Size = UDim2.new(0, 0, 0, 0)
+                    }):Play()
+                    tw:Play()
+                    tw.Completed:Wait()
+                end)
                 if part and part.Parent then part:Destroy() end
                 particulasAtivas = math.max(0, particulasAtivas - 1)
             end)
@@ -493,11 +512,11 @@ local function efeitoParticulas(quantidade, cor, tamMax)
     end)
 end
 
--- ✨ Streaks (linhas rápidas passando pela tela)
 local function efeitoStreaks(quantidade, cor)
     task.spawn(function()
         for _ = 1, quantidade do
             task.spawn(function()
+                if not streaksContainer or not streaksContainer.Parent then return end
                 local streak = Instance.new("Frame")
                 streak.Size = UDim2.new(0, math.random(2, 4), 0, math.random(80, 200))
                 streak.Position = UDim2.new(math.random(), 0, -0.3, 0)
@@ -517,12 +536,14 @@ local function efeitoStreaks(quantidade, cor)
                 })
                 grad.Parent = streak
 
-                local tw = TweenService:Create(streak, TweenInfo.new(math.random(30, 60) / 100, Enum.EasingStyle.Linear), {
-                    Position = UDim2.new(streak.Position.X.Scale, 0, 1.3, 0),
-                    BackgroundTransparency = 1
-                })
-                tw:Play()
-                tw.Completed:Wait()
+                pcall(function()
+                    local tw = TweenService:Create(streak, TweenInfo.new(math.random(30, 60) / 100, Enum.EasingStyle.Linear), {
+                        Position = UDim2.new(streak.Position.X.Scale, 0, 1.3, 0),
+                        BackgroundTransparency = 1
+                    })
+                    tw:Play()
+                    tw.Completed:Wait()
+                end)
                 if streak and streak.Parent then streak:Destroy() end
             end)
             task.wait(0.02)
@@ -538,13 +559,15 @@ local function cameraShake(intensidade, duracao)
     conn = RunService.RenderStepped:Connect(function()
         local decorrido = os.clock() - inicio
         if decorrido >= duracao then
-            conn:Disconnect()
+            if conn then conn:Disconnect() end
             return
         end
         local p = 1 - (decorrido / duracao)
         local sx = (math.random() - 0.5) * 2 * intensidade * p / 100
         local sy = (math.random() - 0.5) * 2 * intensidade * p / 100
-        camera.CFrame = camera.CFrame * CFrame.new(sx, sy, 0)
+        pcall(function()
+            camera.CFrame = camera.CFrame * CFrame.new(sx, sy, 0)
+        end)
     end)
 end
 
@@ -556,7 +579,7 @@ local function playTPSound()
     s.SoundId = TP_AUDIO_ID
     s.Volume = 3
     s.Parent = SoundService
-    s:Play()
+    pcall(function() s:Play() end)
     task.delay(5, function()
         if s and s.Parent then s:Destroy() end
     end)
@@ -573,7 +596,7 @@ local function playRandomTPSound()
         while not s.IsLoaded and os.clock() - inicio < 3 do task.wait(0.05) end
         if s and s.Parent then
             if escolhido.startAt > 0 then s.TimePosition = escolhido.startAt end
-            s:Play()
+            pcall(function() s:Play() end)
         end
     end)
     task.delay(15, function()
@@ -582,7 +605,7 @@ local function playRandomTPSound()
 end
 
 --=============================================================
--- ✨ EFEITO TP ULTRA
+-- EFEITO TP ULTRA
 --=============================================================
 local COR_TP = Color3.fromRGB(50, 255, 130)
 local efeitoTPRefs = 0
@@ -603,9 +626,11 @@ local function efeitoTP()
         flashTela(Color3.fromRGB(255, 255, 255), 0.18)
         pulsoCor(COR_TP, 0.5)
 
-        TweenService:Create(fadeFrame, TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-            BackgroundTransparency = 1
-        }):Play()
+        pcall(function()
+            TweenService:Create(fadeFrame, TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                BackgroundTransparency = 1
+            }):Play()
+        end)
 
         efeitoOndas(4, 0.7, COR_TP)
         efeitoParticulas(70, COR_TP, 10)
@@ -621,7 +646,7 @@ local function efeitoTP()
 end
 
 --=============================================================
--- FECHAR PORTAL (com explosão de partículas)
+-- FECHAR PORTAL
 --=============================================================
 local function fecharPortal(portalPart)
     if not portalPart or not portalPart.Parent then return end
@@ -640,7 +665,6 @@ local function fecharPortal(portalPart)
         end
     end
 
-    -- Limpa elementos extras
     for _, filho in ipairs(portalPart:GetChildren()) do
         if filho.Name == "RingRotativo" or filho.Name == "LightBeam" then
             pcall(function()
@@ -662,11 +686,12 @@ local function fecharPortal(portalPart)
     local DUR = 0.5
     local cframeInicial = portalPart.CFrame
 
-    TweenService:Create(portalPart, TweenInfo.new(DUR, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
-        Size = Vector3.new(0, 0, 0.01)
-    }):Play()
+    pcall(function()
+        TweenService:Create(portalPart, TweenInfo.new(DUR, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+            Size = Vector3.new(0, 0, 0.01)
+        }):Play()
+    end)
 
-    -- ✨ Explosão de partículas no fechamento
     task.spawn(function()
         local pAux = Instance.new("Part")
         pAux.Anchored = true
@@ -692,7 +717,7 @@ local function fecharPortal(portalPart)
         })
         pe.LightEmission = 1
         pe.Parent = pAux
-        pe:Emit(30)
+        pcall(function() pe:Emit(30) end)
         task.delay(1, function() if pAux and pAux.Parent then pAux:Destroy() end end)
     end)
 
@@ -703,8 +728,10 @@ local function fecharPortal(portalPart)
                 if portalPart and portalPart.Parent then portalPart:Destroy() end
                 break
             end
-            portalPart.CFrame = cframeInicial
-            RunService.Heartbeat:Wait()
+            pcall(function()
+                portalPart.CFrame = cframeInicial
+            end)
+            task.wait(0.03)  -- ✅ FIX #4: task.wait em vez de Heartbeat:Wait
         end
     end)
 end
@@ -764,7 +791,6 @@ local VOID_TOLERANCIA, CEU_TOLERANCIA = 3, 3
 local voidPlaceFolder, voidMonitorConn = nil, nil
 local localTP = nil
 local voidForaDesde = nil
-
 local ceuPlaceFolder, ceuMonitorConn = nil, nil
 local ceuLocalTP = nil
 local ceuForaDesde = nil
@@ -809,7 +835,6 @@ local function deletarCeuLocalTP()
     ceuLocalTP = nil
 end
 
--- ✨ Place Folder ULTRA (borda neon dupla + anel + partículas)
 local function criarPlaceFolder(nome, centro, tamanho, corBase)
     corBase = corBase or COR_LINHA
     local folder = Instance.new("Folder")
@@ -826,7 +851,6 @@ local function criarPlaceFolder(nome, centro, tamanho, corBase)
     chao.Color = Color3.fromRGB(45, 90, 40)
     chao.Parent = folder
 
-    -- Borda neon
     local borda = Instance.new("Part")
     borda.Name = "Borda"
     borda.Size = Vector3.new(tamanho * 2 + 4, 1, tamanho * 2 + 4)
@@ -838,7 +862,6 @@ local function criarPlaceFolder(nome, centro, tamanho, corBase)
     borda.Transparency = 0.2
     borda.Parent = folder
 
-    -- Borda fina extra
     local borda2 = Instance.new("Part")
     borda2.Name = "Borda2"
     borda2.Size = Vector3.new(tamanho * 2 + 8, 0.5, tamanho * 2 + 8)
@@ -850,7 +873,6 @@ local function criarPlaceFolder(nome, centro, tamanho, corBase)
     borda2.Transparency = 0.7
     borda2.Parent = folder
 
-    -- Anel rotativo
     local anel = Instance.new("Part")
     anel.Name = "AnelRotativo"
     anel.Shape = Enum.PartType.Cylinder
@@ -865,12 +887,13 @@ local function criarPlaceFolder(nome, centro, tamanho, corBase)
 
     task.spawn(function()
         while anel and anel.Parent do
-            anel.CFrame = anel.CFrame * CFrame.Angles(math.rad(1), 0, 0)
+            pcall(function()
+                anel.CFrame = anel.CFrame * CFrame.Angles(math.rad(1), 0, 0)
+            end)
             task.wait(0.03)
         end
     end)
 
-    -- Luz central
     local luz = Instance.new("Part")
     luz.Name = "Luz"
     luz.Size = Vector3.new(1, 1, 1)
@@ -886,7 +909,6 @@ local function criarPlaceFolder(nome, centro, tamanho, corBase)
     pl.Brightness = 3
     pl.Parent = luz
 
-    -- Partículas subindo constantemente
     local emitterP = Instance.new("Part")
     emitterP.Size = Vector3.new(1, 1, 1)
     emitterP.Position = centro + Vector3.new(0, 30, 0)
@@ -1012,7 +1034,7 @@ local function monitorarSaidaDoCeu()
 end
 
 --=============================================================
--- ✨ UI PRINCIPAL ULTRA
+-- UI PRINCIPAL
 --=============================================================
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "RickPortalGUI"
@@ -1038,7 +1060,6 @@ local mainCorner = Instance.new("UICorner")
 mainCorner.CornerRadius = UDim.new(0, 6)
 mainCorner.Parent = mainFrame
 
--- ✨ Gradiente no fundo
 local mainGrad = Instance.new("UIGradient")
 mainGrad.Color = ColorSequence.new({
     ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 20, 12)),
@@ -1054,13 +1075,11 @@ mainStroke.Thickness = 1.5
 mainStroke.Transparency = 0.1
 mainStroke.Parent = mainFrame
 
--- ✨ Cantos
-local function fazerCanto(posX, posY, offX, offY, cor)
-    cor = cor or COR_LINHA
+local function fazerCanto(posX, posY, offX, offY)
     local cantoH = Instance.new("Frame")
     cantoH.Size = UDim2.new(0, 12, 0, 2)
     cantoH.Position = UDim2.new(posX.Scale, posX.Offset + offX, posY.Scale, posY.Offset)
-    cantoH.BackgroundColor3 = cor
+    cantoH.BackgroundColor3 = COR_LINHA
     cantoH.BorderSizePixel = 0
     cantoH.ZIndex = 5
     cantoH.Parent = mainFrame
@@ -1071,7 +1090,7 @@ local function fazerCanto(posX, posY, offX, offY, cor)
     local cantoV = Instance.new("Frame")
     cantoV.Size = UDim2.new(0, 2, 0, 12)
     cantoV.Position = UDim2.new(posX.Scale, posX.Offset, posY.Scale, posY.Offset + offY)
-    cantoV.BackgroundColor3 = cor
+    cantoV.BackgroundColor3 = COR_LINHA
     cantoV.BorderSizePixel = 0
     cantoV.ZIndex = 5
     cantoV.Parent = mainFrame
@@ -1104,11 +1123,9 @@ innerStroke.Thickness = 1
 innerStroke.Transparency = 0.5
 innerStroke.Parent = innerScreen
 
--- ✨ Efeitos dentro do menu
 criarParticulasFlutuantes(innerScreen, 3, COR_LINHA)
 criarScanline(innerScreen, COR_LINHA)
 
--- Barra de status com gradiente animado
 local statusBar = Instance.new("Frame")
 statusBar.Size = UDim2.new(1, 0, 0, 3)
 statusBar.BackgroundColor3 = COR_LINHA
@@ -1126,15 +1143,19 @@ statusGrad.Parent = statusBar
 
 task.spawn(function()
     while statusBar and statusBar.Parent do
-        TweenService:Create(statusGrad, TweenInfo.new(2, Enum.EasingStyle.Sine), {
-            Offset = Vector2.new(1, 0)
-        }):Play()
+        pcall(function()
+            TweenService:Create(statusGrad, TweenInfo.new(2, Enum.EasingStyle.Sine), {
+                Offset = Vector2.new(1, 0)
+            }):Play()
+        end)
         task.wait(2)
         if not (statusBar and statusBar.Parent) then break end
         statusGrad.Offset = Vector2.new(-1, 0)
-        TweenService:Create(statusGrad, TweenInfo.new(2, Enum.EasingStyle.Sine), {
-            Offset = Vector2.new(0, 0)
-        }):Play()
+        pcall(function()
+            TweenService:Create(statusGrad, TweenInfo.new(2, Enum.EasingStyle.Sine), {
+                Offset = Vector2.new(0, 0)
+            }):Play()
+        end)
         task.wait(2)
     end
 end)
@@ -1159,7 +1180,7 @@ local titleTag = Instance.new("TextLabel")
 titleTag.Size = UDim2.new(1, -10, 0, 8)
 titleTag.Position = UDim2.new(0, 5, 0, 6)
 titleTag.BackgroundTransparency = 1
-titleTag.Text = "▰ PRIME OS // v44 ULTRA"
+titleTag.Text = "▰ PRIME OS // v45 DELTA"
 titleTag.TextColor3 = COR_CIANO
 titleTag.Font = Enum.Font.Code
 titleTag.TextSize = 6
@@ -1189,14 +1210,18 @@ titleGrad.Parent = title
 
 task.spawn(function()
     while title and title.Parent do
-        TweenService:Create(titleGrad, TweenInfo.new(1.5, Enum.EasingStyle.Sine), {
-            Offset = Vector2.new(0.5, 0)
-        }):Play()
+        pcall(function()
+            TweenService:Create(titleGrad, TweenInfo.new(1.5, Enum.EasingStyle.Sine), {
+                Offset = Vector2.new(0.5, 0)
+            }):Play()
+        end)
         task.wait(1.5)
         if not (title and title.Parent) then break end
-        TweenService:Create(titleGrad, TweenInfo.new(1.5, Enum.EasingStyle.Sine), {
-            Offset = Vector2.new(0, 0)
-        }):Play()
+        pcall(function()
+            TweenService:Create(titleGrad, TweenInfo.new(1.5, Enum.EasingStyle.Sine), {
+                Offset = Vector2.new(0, 0)
+            }):Play()
+        end)
         task.wait(1.5)
     end
 end)
@@ -1223,12 +1248,16 @@ task.spawn(function()
     while liveDot and liveDot.Parent do
         liveDot.BackgroundTransparency = 0
         liveDotStroke.Transparency = 0.1
-        TweenService:Create(liveDot, TweenInfo.new(0.3), {Size = UDim2.new(0, 9, 0, 9)}):Play()
+        pcall(function()
+            TweenService:Create(liveDot, TweenInfo.new(0.3), {Size = UDim2.new(0, 9, 0, 9)}):Play()
+        end)
         task.wait(0.5)
         if not (liveDot and liveDot.Parent) then break end
         liveDot.BackgroundTransparency = 0.7
         liveDotStroke.Transparency = 0.8
-        TweenService:Create(liveDot, TweenInfo.new(0.3), {Size = UDim2.new(0, 5, 0, 5)}):Play()
+        pcall(function()
+            TweenService:Create(liveDot, TweenInfo.new(0.3), {Size = UDim2.new(0, 5, 0, 5)}):Play()
+        end)
         task.wait(0.5)
     end
 end)
@@ -1275,7 +1304,7 @@ local refreshLock = false
 local refreshAgendado = false
 
 --=============================================================
--- ✨ createButton ULTRA
+-- createButton
 --=============================================================
 local function createButton(text, yPos, iconeCor, semHover)
     iconeCor = iconeCor or COR_LINHA
@@ -1296,7 +1325,6 @@ local function createButton(text, yPos, iconeCor, semHover)
     bc.CornerRadius = UDim.new(0, 4)
     bc.Parent = btn
 
-    -- ✨ Gradiente
     local grad = Instance.new("UIGradient")
     grad.Color = ColorSequence.new({
         ColorSequenceKeypoint.new(0, Color3.fromRGB(25, 30, 27)),
@@ -1312,7 +1340,6 @@ local function createButton(text, yPos, iconeCor, semHover)
     bs.Transparency = 0.4
     bs.Parent = btn
 
-    -- ✨ Accent com gradiente
     local accent = Instance.new("Frame")
     accent.Name = "Accent"
     accent.Size = UDim2.new(0, 3, 1, -6)
@@ -1347,7 +1374,6 @@ local function createButton(text, yPos, iconeCor, semHover)
     lbl.ZIndex = 5
     lbl.Parent = btn
 
-    -- ✨ UIScale para hover
     local scale = Instance.new("UIScale")
     scale.Scale = 1
     scale.Parent = btn
@@ -1355,7 +1381,9 @@ local function createButton(text, yPos, iconeCor, semHover)
     if not semHover then
         btn.MouseEnter:Connect(function()
             if not btn:GetAttribute("ActiveState") then
-                TweenService:Create(scale, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1.03}):Play()
+                pcall(function()
+                    TweenService:Create(scale, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1.03}):Play()
+                end)
                 btn.BackgroundColor3 = Color3.fromRGB(25, 40, 32)
                 bs.Color = COR_LINHA
                 bs.Transparency = 0.1
@@ -1366,7 +1394,9 @@ local function createButton(text, yPos, iconeCor, semHover)
 
         btn.MouseLeave:Connect(function()
             if not btn:GetAttribute("ActiveState") then
-                TweenService:Create(scale, TweenInfo.new(0.15, Enum.EasingStyle.Quad), {Scale = 1}):Play()
+                pcall(function()
+                    TweenService:Create(scale, TweenInfo.new(0.15, Enum.EasingStyle.Quad), {Scale = 1}):Play()
+                end)
                 btn.BackgroundColor3 = COR_PANEL
                 bs.Color = COR_LINHA_D
                 bs.Transparency = 0.4
@@ -1376,10 +1406,14 @@ local function createButton(text, yPos, iconeCor, semHover)
         end)
 
         btn.MouseButton1Down:Connect(function()
-            TweenService:Create(scale, TweenInfo.new(0.08), {Scale = 0.96}):Play()
+            pcall(function()
+                TweenService:Create(scale, TweenInfo.new(0.08), {Scale = 0.96}):Play()
+            end)
         end)
         btn.MouseButton1Up:Connect(function()
-            TweenService:Create(scale, TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1.03}):Play()
+            pcall(function()
+                TweenService:Create(scale, TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1.03}):Play()
+            end)
         end)
     end
 
@@ -1443,7 +1477,6 @@ ceusBtn.MouseLeave:Connect(function()
     ceusBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 end)
 
--- ✨ Brilho pulsante em botões perigosos
 criarBrilhoPulsante(voidBtn, COR_VERMELHO, 80, 150)
 criarBrilhoPulsante(antiTPBtn, COR_VERMELHO, 80, 150)
 criarBrilhoPulsante(ceusBtn, COR_CIANO, 80, 150)
@@ -1594,7 +1627,7 @@ uiListLayout.Padding = UDim.new(0, 2)
 uiListLayout.Parent = scrollingList
 
 --=============================================================
--- ✨ PORTAL ULTRA
+-- PORTAL ULTRA
 --=============================================================
 local function createPortalInstance(cframe, tag, opcoes)
     opcoes = opcoes or {}
@@ -1622,10 +1655,9 @@ local function createPortalInstance(cframe, tag, opcoes)
         portalLoop.RollOffMaxDistance = 150
         portalLoop.RollOffMode = Enum.RollOffMode.InverseTapered
         portalLoop.Parent = portalPart
-        portalLoop:Play()
+        pcall(function() portalLoop:Play() end)
     end
 
-    -- ✨ PointLight + SpotLight
     local portalLight = Instance.new("PointLight")
     portalLight.Color = COR_LINHA
     portalLight.Range = 25
@@ -1640,7 +1672,6 @@ local function createPortalInstance(cframe, tag, opcoes)
     spotlight.Face = Enum.NormalId.Front
     spotlight.Parent = portalPart
 
-    -- ✨ Múltiplas camadas de partículas
     if opcoes.comParticulas ~= false then
         local sparks = Instance.new("ParticleEmitter")
         sparks.Name = "PortalSparks"
@@ -1695,7 +1726,6 @@ local function createPortalInstance(cframe, tag, opcoes)
         glowP.Parent = portalPart
     end
 
-    -- ✨ Anel rotativo
     local ring = Instance.new("Part")
     ring.Name = "RingRotativo"
     ring.Shape = Enum.PartType.Cylinder
@@ -1711,12 +1741,13 @@ local function createPortalInstance(cframe, tag, opcoes)
 
     task.spawn(function()
         while ring and ring.Parent do
-            ring.CFrame = ring.CFrame * CFrame.Angles(math.rad(2), 0, 0)
+            pcall(function()
+                ring.CFrame = ring.CFrame * CFrame.Angles(math.rad(2), 0, 0)
+            end)
             task.wait(0.03)
         end
     end)
 
-    -- ✨ Feixe de luz vertical
     local beam = Instance.new("Part")
     beam.Name = "LightBeam"
     beam.Size = Vector3.new(1, 50, 1)
@@ -1731,7 +1762,9 @@ local function createPortalInstance(cframe, tag, opcoes)
 
     task.spawn(function()
         while beam and beam.Parent do
-            beam.Transparency = 0.7 + math.sin(tick() * 3) * 0.15
+            pcall(function()
+                beam.Transparency = 0.7 + math.sin(os.clock() * 3) * 0.15
+            end)
             task.wait(0.05)
         end
     end)
@@ -1768,20 +1801,25 @@ local function createPortalInstance(cframe, tag, opcoes)
     local fFront = createSurfaceFace(Enum.NormalId.Front)
     local bFront = createSurfaceFace(Enum.NormalId.Back)
 
-    TweenService:Create(portalPart, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-        Size = Vector3.new(7, 7, 0.1)
-    }):Play()
-    TweenService:Create(ring, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-        Size = Vector3.new(0.15, 8, 8)
-    }):Play()
+    pcall(function()
+        TweenService:Create(portalPart, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Size = Vector3.new(7, 7, 0.1)
+        }):Play()
+        TweenService:Create(ring, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Size = Vector3.new(0.15, 8, 8)
+        }):Play()
+    end)
 
-    -- ✨ Pulso na luz
     task.spawn(function()
         while portalPart and portalPart.Parent do
-            TweenService:Create(portalLight, TweenInfo.new(0.6, Enum.EasingStyle.Sine), {Brightness = 7}):Play()
+            pcall(function()
+                TweenService:Create(portalLight, TweenInfo.new(0.6, Enum.EasingStyle.Sine), {Brightness = 7}):Play()
+            end)
             task.wait(0.6)
             if not (portalPart and portalPart.Parent) then break end
-            TweenService:Create(portalLight, TweenInfo.new(0.6, Enum.EasingStyle.Sine), {Brightness = 4}):Play()
+            pcall(function()
+                TweenService:Create(portalLight, TweenInfo.new(0.6, Enum.EasingStyle.Sine), {Brightness = 4}):Play()
+            end)
             task.wait(0.6)
         end
     end)
@@ -1789,9 +1827,11 @@ local function createPortalInstance(cframe, tag, opcoes)
     if opcoes.comGiro ~= false then
         task.spawn(function()
             while portalPart and portalPart.Parent do
-                local fRot = (fFront.Rotation + 10) % 360
-                fFront.Rotation = fRot
-                bFront.Rotation = fRot
+                pcall(function()
+                    local fRot = (fFront.Rotation + 10) % 360
+                    fFront.Rotation = fRot
+                    bFront.Rotation = fRot
+                end)
                 task.wait(0.03)
             end
         end)
@@ -1835,12 +1875,14 @@ local function fecharPainel()
     panelOpen = false
     tpPlayerBtn:SetAttribute("ActiveState", false)
     slidingPanel.Size = UDim2.new(0, 0, 1, 0)
-    panelTween = TweenService:Create(
-        slidingPanel,
-        TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
-        { Size = UDim2.new(0, 0, 1, 0) }
-    )
-    panelTween:Play()
+    pcall(function()
+        panelTween = TweenService:Create(
+            slidingPanel,
+            TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+            { Size = UDim2.new(0, 0, 1, 0) }
+        )
+        panelTween:Play()
+    end)
     tpPlayerBtn.BackgroundColor3 = COR_PANEL
     local lbl = tpPlayerBtn:FindFirstChildOfClass("TextLabel")
     if lbl then lbl.TextColor3 = COR_TEXTO end
@@ -1851,12 +1893,14 @@ local function abrirPainel()
     panelOpen = true
     tpPlayerBtn:SetAttribute("ActiveState", true)
     slidingPanel.Size = UDim2.new(0, 0, 1, 0)
-    panelTween = TweenService:Create(
-        slidingPanel,
-        TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-        { Size = UDim2.new(0, 95, 1, 0) }
-    )
-    panelTween:Play()
+    pcall(function()
+        panelTween = TweenService:Create(
+            slidingPanel,
+            TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+            { Size = UDim2.new(0, 95, 1, 0) }
+        )
+        panelTween:Play()
+    end)
     tpPlayerBtn.BackgroundColor3 = Color3.fromRGB(20, 45, 30)
 end
 
@@ -2609,10 +2653,14 @@ end)
 refreshBtn.MouseButton1Click:Connect(function()
     refreshBtn.Text = "..."
     local count = refreshPlayerList()
-    TweenService:Create(refreshBtn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(30, 70, 50)}):Play()
+    pcall(function()
+        TweenService:Create(refreshBtn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(30, 70, 50)}):Play()
+    end)
     task.wait(0.3)
     refreshBtn.Text = "R"
-    TweenService:Create(refreshBtn, TweenInfo.new(0.3), {BackgroundColor3 = COR_PANEL}):Play()
+    pcall(function()
+        TweenService:Create(refreshBtn, TweenInfo.new(0.3), {BackgroundColor3 = COR_PANEL}):Play()
+    end)
     if not modoFavorito then
         panelTitle.Text = "TARGETS (" .. count .. ")"
         task.delay(2, function()
@@ -2851,17 +2899,20 @@ avParticulasContainer.Parent = fxGui
 local function avFlashTela(cor, dur)
     avFlash.BackgroundColor3 = cor
     avFlash.BackgroundTransparency = 0
-    TweenService:Create(
-        avFlash,
-        TweenInfo.new(dur or 0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-        { BackgroundTransparency = 1 }
-    ):Play()
+    pcall(function()
+        TweenService:Create(
+            avFlash,
+            TweenInfo.new(dur or 0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+            { BackgroundTransparency = 1 }
+        ):Play()
+    end)
 end
 
 local function avEfeitoOndas(quantidade, duracao, cor)
     task.spawn(function()
         for _ = 1, quantidade do
             task.spawn(function()
+                if not avOndasContainer or not avOndasContainer.Parent then return end
                 local onda = Instance.new("Frame")
                 onda.Size = UDim2.new(0, 0, 0, 0)
                 onda.Position = UDim2.new(0.5, 0, 0.5, 0)
@@ -2887,15 +2938,17 @@ local function avEfeitoOndas(quantidade, duracao, cor)
                 s2.Transparency = 0.6
                 s2.Parent = onda
 
-                TweenService:Create(onda, TweenInfo.new(duracao, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-                    Size = UDim2.new(3.5, 0, 3.5, 0)
-                }):Play()
-                TweenService:Create(s, TweenInfo.new(duracao, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-                    Transparency = 1, Thickness = 1
-                }):Play()
-                TweenService:Create(s2, TweenInfo.new(duracao, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-                    Transparency = 1, Thickness = 0
-                }):Play()
+                pcall(function()
+                    TweenService:Create(onda, TweenInfo.new(duracao, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                        Size = UDim2.new(3.5, 0, 3.5, 0)
+                    }):Play()
+                    TweenService:Create(s, TweenInfo.new(duracao, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                        Transparency = 1, Thickness = 1
+                    }):Play()
+                    TweenService:Create(s2, TweenInfo.new(duracao, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                        Transparency = 1, Thickness = 0
+                    }):Play()
+                end)
 
                 task.wait(duracao)
                 if onda and onda.Parent then onda:Destroy() end
@@ -2909,6 +2962,7 @@ local function avEfeitoParticulas(quantidade, cor)
     task.spawn(function()
         for _ = 1, quantidade do
             task.spawn(function()
+                if not avParticulasContainer or not avParticulasContainer.Parent then return end
                 local part = Instance.new("Frame")
                 part.Size = UDim2.new(0, math.random(3, 10), 0, math.random(3, 10))
                 part.Position = UDim2.new(0.5, 0, 0.5, 0)
@@ -2939,17 +2993,19 @@ local function avEfeitoParticulas(quantidade, cor)
 
                 local angulo = math.random() * math.pi * 2
                 local distancia = math.random(80, 180) / 100
-                local tw = TweenService:Create(part, TweenInfo.new(math.random(40, 80) / 100, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-                    Position = UDim2.new(0.5 + math.cos(angulo) * distancia, 0, 0.5 + math.sin(angulo) * distancia, 0),
-                    BackgroundTransparency = 1,
-                    Size = UDim2.new(0, 0, 0, 0)
-                })
-                TweenService:Create(glow, TweenInfo.new(math.random(40, 80) / 100, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-                    BackgroundTransparency = 1,
-                    Size = UDim2.new(0, 0, 0, 0)
-                }):Play()
-                tw:Play()
-                tw.Completed:Wait()
+                pcall(function()
+                    local tw = TweenService:Create(part, TweenInfo.new(math.random(40, 80) / 100, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                        Position = UDim2.new(0.5 + math.cos(angulo) * distancia, 0, 0.5 + math.sin(angulo) * distancia, 0),
+                        BackgroundTransparency = 1,
+                        Size = UDim2.new(0, 0, 0, 0)
+                    })
+                    TweenService:Create(glow, TweenInfo.new(math.random(40, 80) / 100, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                        BackgroundTransparency = 1,
+                        Size = UDim2.new(0, 0, 0, 0)
+                    }):Play()
+                    tw:Play()
+                    tw.Completed:Wait()
+                end)
                 if part and part.Parent then part:Destroy() end
             end)
         end
@@ -2965,9 +3021,11 @@ local function avEfeitoTeleporte()
         avFlashTela(Color3.fromRGB(255, 255, 255), 0.18)
         pulsoCor(COR_CIANO, 0.5)
 
-        TweenService:Create(avFade, TweenInfo.new(0.65, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-            BackgroundTransparency = 1
-        }):Play()
+        pcall(function()
+            TweenService:Create(avFade, TweenInfo.new(0.65, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                BackgroundTransparency = 1
+            }):Play()
+        end)
 
         avEfeitoOndas(4, 0.7, COR_LINHA)
         avEfeitoParticulas(80, COR_LINHA)
@@ -3051,6 +3109,8 @@ local function avTeleportarParaSuperficie(character)
             local spawn = workspace:FindFirstChildOfClass("SpawnLocation")
             if spawn then
                 avTeleportar(spawn.Position + Vector3.new(0, 5, 0), character)
+            else
+                avTeleportar(Vector3.new(0, 50, 0), character)
             end
         end
 
@@ -3311,15 +3371,17 @@ minimizarBtn.MouseButton1Click:Connect(function()
             minimizarStroke.Transparency = 0.1
         end
 
-        TweenService:Create(titleTag, TweenInfo.new(0.25), {TextTransparency = 1}):Play()
-        TweenService:Create(title, TweenInfo.new(0.25), {TextTransparency = 1}):Play()
-        TweenService:Create(liveDot, TweenInfo.new(0.25), {BackgroundTransparency = 1}):Play()
-        TweenService:Create(liveDotStroke, TweenInfo.new(0.25), {Transparency = 1}):Play()
-        TweenService:Create(quoteLabel, TweenInfo.new(0.25), {TextTransparency = 1}):Play()
-        TweenService:Create(divTop, TweenInfo.new(0.25), {BackgroundTransparency = 1}):Play()
-        TweenService:Create(footerLabel, TweenInfo.new(0.25), {TextTransparency = 1}):Play()
-        TweenService:Create(statusBar, TweenInfo.new(0.25), {BackgroundTransparency = 1}):Play()
-        TweenService:Create(innerStroke, TweenInfo.new(0.25), {Transparency = 1}):Play()
+        pcall(function()
+            TweenService:Create(titleTag, TweenInfo.new(0.25), {TextTransparency = 1}):Play()
+            TweenService:Create(title, TweenInfo.new(0.25), {TextTransparency = 1}):Play()
+            TweenService:Create(liveDot, TweenInfo.new(0.25), {BackgroundTransparency = 1}):Play()
+            TweenService:Create(liveDotStroke, TweenInfo.new(0.25), {Transparency = 1}):Play()
+            TweenService:Create(quoteLabel, TweenInfo.new(0.25), {TextTransparency = 1}):Play()
+            TweenService:Create(divTop, TweenInfo.new(0.25), {BackgroundTransparency = 1}):Play()
+            TweenService:Create(footerLabel, TweenInfo.new(0.25), {TextTransparency = 1}):Play()
+            TweenService:Create(statusBar, TweenInfo.new(0.25), {BackgroundTransparency = 1}):Play()
+            TweenService:Create(innerStroke, TweenInfo.new(0.25), {Transparency = 1}):Play()
+        end)
 
         for _, btn in ipairs(ocultarAoMinimizar) do
             if btn and btn.Parent then
@@ -3331,9 +3393,11 @@ minimizarBtn.MouseButton1Click:Connect(function()
 
         minimizarBtn.Position = UDim2.new(0.05, 0, 0, 10)
 
-        TweenService:Create(mainFrame, TweenInfo.new(0.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-            Size = UDim2.new(0, 110, 0, alturaMinimizada)
-        }):Play()
+        pcall(function()
+            TweenService:Create(mainFrame, TweenInfo.new(0.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                Size = UDim2.new(0, 110, 0, alturaMinimizada)
+            }):Play()
+        end)
     else
         if lbl then
             lbl.Text = "▾ MINIMIZAR"
@@ -3345,21 +3409,25 @@ minimizarBtn.MouseButton1Click:Connect(function()
             minimizarStroke.Transparency = 0.4
         end
 
-        TweenService:Create(titleTag, TweenInfo.new(0.25), {TextTransparency = 0}):Play()
-        TweenService:Create(title, TweenInfo.new(0.25), {TextTransparency = 0}):Play()
-        TweenService:Create(liveDot, TweenInfo.new(0.25), {BackgroundTransparency = 0}):Play()
-        TweenService:Create(liveDotStroke, TweenInfo.new(0.25), {Transparency = 0.3}):Play()
-        TweenService:Create(quoteLabel, TweenInfo.new(0.25), {TextTransparency = 0}):Play()
-        TweenService:Create(divTop, TweenInfo.new(0.25), {BackgroundTransparency = 0}):Play()
-        TweenService:Create(footerLabel, TweenInfo.new(0.25), {TextTransparency = 0}):Play()
-        TweenService:Create(statusBar, TweenInfo.new(0.25), {BackgroundTransparency = 0}):Play()
-        TweenService:Create(innerStroke, TweenInfo.new(0.25), {Transparency = 0.5}):Play()
+        pcall(function()
+            TweenService:Create(titleTag, TweenInfo.new(0.25), {TextTransparency = 0}):Play()
+            TweenService:Create(title, TweenInfo.new(0.25), {TextTransparency = 0}):Play()
+            TweenService:Create(liveDot, TweenInfo.new(0.25), {BackgroundTransparency = 0}):Play()
+            TweenService:Create(liveDotStroke, TweenInfo.new(0.25), {Transparency = 0.3}):Play()
+            TweenService:Create(quoteLabel, TweenInfo.new(0.25), {TextTransparency = 0}):Play()
+            TweenService:Create(divTop, TweenInfo.new(0.25), {BackgroundTransparency = 0}):Play()
+            TweenService:Create(footerLabel, TweenInfo.new(0.25), {TextTransparency = 0}):Play()
+            TweenService:Create(statusBar, TweenInfo.new(0.25), {BackgroundTransparency = 0}):Play()
+            TweenService:Create(innerStroke, TweenInfo.new(0.25), {Transparency = 0.5}):Play()
+        end)
 
         minimizarBtn.Position = UDim2.new(0.05, 0, 0, 208)
 
-        TweenService:Create(mainFrame, TweenInfo.new(0.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-            Size = UDim2.new(0, 110, 0, alturaOriginal)
-        }):Play()
+        pcall(function()
+            TweenService:Create(mainFrame, TweenInfo.new(0.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                Size = UDim2.new(0, 110, 0, alturaOriginal)
+            }):Play()
+        end)
 
         for _, btn in ipairs(ocultarAoMinimizar) do
             if not btn or not btn.Parent then continue end
@@ -3435,13 +3503,13 @@ local function fullCleanup()
     antiVoidAtivo = false
     efeitoTPRefs = 0
 
-    pcall(wipePortalsPorTag, TAG_GEN, true)
-    pcall(wipePortalsPorTag, TAG_M1, true)
-    pcall(wipePortalsPorTag, TAG_M2, true)
-    pcall(wipePortalsPorTag, TAG_VOID, true)
-    pcall(wipePortalsPorTag, TAG_CEU, true)
-    pcall(wipePortalsPorTag, TAG_RET, true)
-    pcall(wipePortalsPorTag, TAG_SAIDA, true)
+    pcall(function() wipePortalsPorTag(TAG_GEN, true) end)
+    pcall(function() wipePortalsPorTag(TAG_M1, true) end)
+    pcall(function() wipePortalsPorTag(TAG_M2, true) end)
+    pcall(function() wipePortalsPorTag(TAG_VOID, true) end)
+    pcall(function() wipePortalsPorTag(TAG_CEU, true) end)
+    pcall(function() wipePortalsPorTag(TAG_RET, true) end)
+    pcall(function() wipePortalsPorTag(TAG_SAIDA, true) end)
     table.clear(activePortals)
 
     deletarVoidPlace()
@@ -3503,16 +3571,19 @@ closeBtn.MouseButton1Click:Connect(function()
     end
     panelOpen = false
 
-    local slideOutTween = TweenService:Create(
-        mainFrame,
-        TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.In),
-        {Position = UDim2.new(0, -160, 0.35, -170)}
-    )
-    slideOutTween:Play()
-    slideOutTween.Completed:Wait()
+    pcall(function()
+        local slideOutTween = TweenService:Create(
+            mainFrame,
+            TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.In),
+            {Position = UDim2.new(0, -160, 0.35, -170)}
+        )
+        slideOutTween:Play()
+        slideOutTween.Completed:Wait()
+    end)
 
     fullCleanup()
 end)
 
-print("✨ Rick Prime v44 ULTRA — Carregado ✨")
+print("✨ Rick Prime v45 DELTA — Carregado com sucesso ✨")
 print("[RickPrime] GUI Parent:", GUI_PARENT:GetFullName())
+print("[RickPrime] LocalPlayer:", player.Name)
